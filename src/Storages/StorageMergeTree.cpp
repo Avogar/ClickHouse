@@ -635,7 +635,7 @@ void StorageMergeTree::loadMutations()
 }
 
 std::shared_ptr<StorageMergeTree::MergeMutateSelectedEntry> StorageMergeTree::selectPartsToMerge(
-    const StorageMetadataPtr & metadata_snapshot, bool aggressive, const String & partition_id, bool final, String * out_disable_reason, SelectPartsDecision * select_decision, TableLockHolder & /* table_lock_holder */)
+    const StorageMetadataPtr & metadata_snapshot, bool aggressive, const String & partition_id, bool final, String * out_disable_reason, TableLockHolder & /* table_lock_holder */, SelectPartsDecision * select_decision_out)
 {
     std::unique_lock lock(currently_processing_in_background_mutex);
     auto data_settings = getSettings();
@@ -656,7 +656,7 @@ std::shared_ptr<StorageMergeTree::MergeMutateSelectedEntry> StorageMergeTree::se
                && getCurrentMutationVersion(left, lock) == getCurrentMutationVersion(right, lock);
     };
 
-    *select_decision = SelectPartsDecision::NOTHING_TO_MERGE;
+    SelectPartsDecision select_decision = SelectPartsDecision::NOTHING_TO_MERGE;
 
     if (partition_id.empty())
     {
@@ -668,7 +668,7 @@ std::shared_ptr<StorageMergeTree::MergeMutateSelectedEntry> StorageMergeTree::se
         /// possible.
         if (max_source_parts_size > 0)
         {
-            *select_decision = merger_mutator.selectPartsToMerge(
+            select_decision = merger_mutator.selectPartsToMerge(
                 future_part,
                 aggressive,
                 max_source_parts_size,
@@ -684,13 +684,13 @@ std::shared_ptr<StorageMergeTree::MergeMutateSelectedEntry> StorageMergeTree::se
         while (true)
         {
             UInt64 disk_space = getStoragePolicy()->getMaxUnreservedFreeSpace();
-            *select_decision = merger_mutator.selectAllPartsToMergeWithinPartition(
+            select_decision = merger_mutator.selectAllPartsToMergeWithinPartition(
                 future_part, disk_space, can_merge, partition_id, final, metadata_snapshot, out_disable_reason);
 
             /// If final - we will wait for currently processing merges to finish and continue.
             /// TODO Respect query settings for timeout
             if (final
-                && *select_decision != SelectPartsDecision::SELECTED
+                && select_decision != SelectPartsDecision::SELECTED
                 && !currently_merging_mutating_parts.empty()
                 && out_disable_reason
                 && out_disable_reason->empty())
@@ -710,7 +710,12 @@ std::shared_ptr<StorageMergeTree::MergeMutateSelectedEntry> StorageMergeTree::se
         }
     }
 
-    if (*select_decision != SelectPartsDecision::SELECTED)
+    /// In case of final we need to know the decision of select in StorageMergeTree::merge
+    /// to treat NOTHING_TO_MERGE as successful merge (otherwise optimize final will be uncompleted)
+    if (select_decision_out)
+        *select_decision_out = select_decision;
+
+    if (select_decision != SelectPartsDecision::SELECTED)
     {
         if (out_disable_reason)
         {
@@ -738,7 +743,14 @@ bool StorageMergeTree::merge(
     auto table_lock_holder = lockForShare(RWLockImpl::NO_QUERY, getSettings()->lock_acquire_timeout_for_background_operations);
     auto metadata_snapshot = getInMemoryMetadataPtr();
 
-    auto merge_mutate_entry = selectPartsToMerge(metadata_snapshot, aggressive, partition_id, final, out_disable_reason, table_lock_holder);
+    SelectPartsDecision select_decision;
+
+    auto merge_mutate_entry = selectPartsToMerge(metadata_snapshot, aggressive, partition_id, final, out_disable_reason, &select_decision, table_lock_holder);
+
+    /// If final and there is nothing to merge then we treat this merge as successful
+    if (final && select_decision == SelectPartsDecision::NOTHING_TO_MERGE)
+        return true;
+
     if (!merge_mutate_entry)
         return false;
 
