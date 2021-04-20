@@ -51,6 +51,7 @@ SRCS(
     IntervalKind.cpp
     JSONBuilder.cpp
     Macros.cpp
+    MasksOperation.cpp
     MemoryStatisticsOS.cpp
     MemoryTracker.cpp
     OpenSSLHelpers.cpp
