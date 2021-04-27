@@ -6,6 +6,7 @@
 #include <Columns/ColumnsNumber.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnNullable.h>
+#include <Columns/MaskOperations.h>
 #include <Common/FieldVisitors.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -14,8 +15,6 @@
 
 #include <algorithm>
 
-#include <Columns/MaskOperations.h>
-#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -475,7 +474,7 @@ static ColumnPtr basicExecuteImpl(ColumnRawPtrs arguments, size_t input_rows_cou
 }
 
 template <typename Impl, typename Name>
-    DataTypePtr FunctionAnyArityLogical<Impl, Name>::getReturnTypeImpl(const DataTypes & arguments) const
+DataTypePtr FunctionAnyArityLogical<Impl, Name>::getReturnTypeImpl(const DataTypes & arguments) const
 {
     if (arguments.size() < 2)
         throw Exception("Number of arguments for function \"" + getName() + "\" should be at least 2: passed "
