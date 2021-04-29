@@ -54,6 +54,8 @@ public:
         const ColumnsDescription & columns;
         const ConstraintsDescription & constraints;
         const String & comment;
+        const Context & context;
+        bool skip_prefix_reading;
     };
 
     NamesAndTypesList getVirtuals() const override;
