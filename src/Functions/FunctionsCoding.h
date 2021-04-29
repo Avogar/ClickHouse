@@ -75,6 +75,7 @@ public:
 
     size_t getNumberOfArguments() const override { return 1; }
     bool isInjective(const ColumnsWithTypeAndName &) const override { return true; }
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -144,6 +145,8 @@ public:
     String getName() const override { return name; }
 
     size_t getNumberOfArguments() const override { return 3; }
+
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -274,6 +277,8 @@ public:
 
     size_t getNumberOfArguments() const override { return 1; }
 
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return false; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!isString(arguments[0]))
@@ -349,6 +354,7 @@ public:
 
     size_t getNumberOfArguments() const override { return 1; }
     bool isInjective(const ColumnsWithTypeAndName &) const override { return mask_tail_octets == 0; }
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -410,6 +416,8 @@ public:
 
     size_t getNumberOfArguments() const override { return 1; }
 
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return false; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!isString(arguments[0]))
@@ -470,6 +478,7 @@ public:
 
     size_t getNumberOfArguments() const override { return 1; }
     bool isInjective(const ColumnsWithTypeAndName &) const override { return true; }
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -526,6 +535,8 @@ public:
         return name;
     }
 
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return false; }
+
     size_t getNumberOfArguments() const override { return 1; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
@@ -545,6 +556,8 @@ public:
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionToIPv6>(); }
 
     String getName() const override { return name; }
+
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -569,6 +582,7 @@ public:
 
     size_t getNumberOfArguments() const override { return 1; }
     bool isInjective(const ColumnsWithTypeAndName &) const override { return true; }
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -699,6 +713,8 @@ public:
 
     size_t getNumberOfArguments() const override { return 1; }
 
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return false; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!isString(arguments[0]))
@@ -762,6 +778,7 @@ public:
 
     size_t getNumberOfArguments() const override { return 1; }
     bool isInjective(const ColumnsWithTypeAndName &) const override { return true; }
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -860,6 +877,7 @@ public:
 
     size_t getNumberOfArguments() const override { return 1; }
     bool isInjective(const ColumnsWithTypeAndName &) const override { return true; }
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -964,6 +982,7 @@ public:
 
     size_t getNumberOfArguments() const override { return 1; }
     bool isInjective(const ColumnsWithTypeAndName &) const override { return true; }
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1247,6 +1266,7 @@ public:
 
     size_t getNumberOfArguments() const override { return 1; }
     bool isInjective(const ColumnsWithTypeAndName &) const override { return true; }
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1336,6 +1356,8 @@ public:
 
     bool isVariadic() const override { return true; }
     bool isInjective(const ColumnsWithTypeAndName &) const override { return true; }
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return false; }
+
     size_t getNumberOfArguments() const override { return 0; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
@@ -1431,6 +1453,7 @@ public:
 
     size_t getNumberOfArguments() const override { return 1; }
     bool isInjective(const ColumnsWithTypeAndName &) const override { return true; }
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1516,6 +1539,8 @@ public:
     }
 
     size_t getNumberOfArguments() const override { return 1; }
+
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1677,6 +1702,7 @@ public:
 
     String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 2; }
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1791,6 +1817,7 @@ public:
 
     String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 2; }
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return false; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
@@ -1872,6 +1899,8 @@ public:
 
     String getName() const override { return name; }
 
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         if (!isString(arguments[0]))
@@ -1917,6 +1946,8 @@ public:
     static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionIsIPv6String>(); }
 
     String getName() const override { return name; }
+
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return true; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {

@@ -171,6 +171,8 @@ public:
 
     size_t getNumberOfArguments() const override { return 3; }
 
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return true; }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         for (size_t i : ext::range(0, 3))
