@@ -90,6 +90,7 @@ private:
         InputCreator input_creator;
         OutputCreator output_creator;
         FileSegmentationEngine file_segmentation_engine;
+        bool supports_schema_inference{false};
         bool supports_parallel_formatting{false};
         bool is_column_oriented{false};
         NonTrivialPrefixAndSuffixChecker non_trivial_prefix_and_suffix_checker;
@@ -138,6 +139,7 @@ public:
         ContextPtr context,
         const std::optional<FormatSettings> & format_settings = std::nullopt) const;
 
+    bool checkIfInputFormatSupportsSchemaInference(const String & name);
     void registerFileSegmentationEngine(const String & name, FileSegmentationEngine file_segmentation_engine);
 
     void registerNonTrivialPrefixAndSuffixChecker(const String & name, NonTrivialPrefixAndSuffixChecker non_trivial_prefix_and_suffix_checker);
@@ -146,6 +148,7 @@ public:
     void registerInputFormat(const String & name, InputCreator input_creator);
     void registerOutputFormat(const String & name, OutputCreator output_creator);
 
+    void markInputFormatSupportsSchemaInference(const String & name);
     void markOutputFormatSupportsParallelFormatting(const String & name);
     void markFormatAsColumnOriented(const String & name);
 
