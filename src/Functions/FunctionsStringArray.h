@@ -434,6 +434,8 @@ public:
         return name;
     }
 
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return true; }
+
     size_t getNumberOfArguments() const override { return Generator::getNumberOfArguments(); }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
@@ -598,6 +600,7 @@ public:
     }
 
     bool isVariadic() const override { return true; }
+    bool isSuitableForShortCircuitArgumentsExecution() const override { return true; }
     size_t getNumberOfArguments() const override { return 0; }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
