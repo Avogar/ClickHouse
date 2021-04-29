@@ -2,6 +2,7 @@
 
 #include <Processors/ISource.h>
 #include <IO/ReadBuffer.h>
+#include <memory>
 
 
 namespace DB
@@ -24,6 +25,13 @@ struct ColumnMapping
 };
 
 using ColumnMappingPtr = std::shared_ptr<ColumnMapping>;
+
+namespace ErrorCodes
+{
+    extern const int NOT_IMPLEMENTED;
+}
+
+class ReadBuffer;
 
 /** Input format is a source, that reads data from ReadBuffer.
   */
@@ -62,6 +70,11 @@ public:
     ColumnMappingPtr getColumnMapping() const { return column_mapping; }
     /// Must be called from ParallelParsingInputFormat before readPrefix
     void setColumnMapping(ColumnMappingPtr column_mapping_) { column_mapping = column_mapping_; }
+
+    virtual Block readSchemaFromPrefix()
+    {
+        throw Exception("readSchemaFromPrefix is not implemented for" + getName() + " InputFormat", ErrorCodes::NOT_IMPLEMENTED);
+    }
 
     size_t getCurrentUnitNumber() const { return current_unit_number; }
     void setCurrentUnitNumber(size_t current_unit_number_) { current_unit_number = current_unit_number_; }
