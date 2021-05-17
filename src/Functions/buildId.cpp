@@ -33,7 +33,7 @@ public:
         return 0;
     }
 
-    bool isSuitableForShortCircuitArgumentsExecution() const override
+    bool isSuitableForShortCircuitArgumentsExecution(ColumnsWithTypeAndName & /*arguments*/) const override
     {
         return false;
     }
