@@ -20,7 +20,7 @@ namespace ErrorCodes
 }
 
 
-template <typename Impl, typename Name, typename ResultType>
+template <typename Impl, typename Name, typename ResultType, bool is_suitable_for_short_circuit_arguments_execution = false>
 class FunctionStringOrArrayToT : public IFunction
 {
 public:
