@@ -19,6 +19,7 @@ namespace ErrorCodes
     extern const int INCORRECT_DATA;
 }
 
+inline void skipEndOfLine(ReadBuffer & in);
 
 JSONCompactEachRowRowInputFormat::JSONCompactEachRowRowInputFormat(
     const Block & header_,
