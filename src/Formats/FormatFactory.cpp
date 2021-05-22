@@ -198,7 +198,6 @@ InputFormatPtr FormatFactory::getInput(
     return format;
 }
 
-
 InputFormatPtr FormatFactory::getInputFormat(
     const String & name,
     ReadBuffer & buf,
@@ -218,12 +217,7 @@ InputFormatPtr FormatFactory::getInputFormat(
 
     auto format_settings = _format_settings ? *_format_settings : getFormatSettings(context);
 
-    RowInputFormatParams params;
-    params.max_block_size = max_block_size;
-    params.allow_errors_num = format_settings.input_allow_errors_num;
-    params.allow_errors_ratio = format_settings.input_allow_errors_ratio;
-    params.max_execution_time = settings.max_execution_time;
-    params.timeout_overflow_mode = settings.timeout_overflow_mode;
+    const RowInputFormatParams & params = getRowInputFormatParams(max_block_size, format_settings, settings);
     auto format = input_getter(buf, sample, params, format_settings);
 
     /// It's a kludge. Because I cannot remove context from values format.
@@ -231,6 +225,55 @@ InputFormatPtr FormatFactory::getInputFormat(
         values->setContext(context);
 
     return format;
+}
+
+InputFormatPtr FormatFactory::getInputFormat(
+    const String & name,
+    ReadBuffer & buf,
+    IInputFormatHeader & format_header,
+    const Context & context,
+    UInt64 max_block_size,
+    const std::optional<FormatSettings> & _format_settings) const
+{
+    const auto & input_getter = getCreators(name).input_with_format_header_processor_creator;
+    if (!input_getter)
+        throw Exception("Format " + name + " is not suitable for input with format header", ErrorCodes::FORMAT_IS_NOT_SUITABLE_FOR_INPUT);
+
+    const Settings & settings = context.getSettingsRef();
+
+    auto format_settings = _format_settings
+        ? *_format_settings : getFormatSettings(context);
+
+    const RowInputFormatParams & params = getRowInputFormatParams(max_block_size, format_settings, settings);
+
+    auto format = input_getter(buf, format_header, params, format_settings);
+
+    /// It's a kludge. Because I cannot remove context from values format.
+    if (auto * values = typeid_cast<ValuesBlockInputFormat *>(format.get()))
+        values->setContext(context);
+
+    return format;
+}
+
+InputFormatHeaderPtr FormatFactory::getInputFormatHeader(
+    const String & name,
+    ReadBuffer & buf,
+    const Context & context,
+    UInt64 max_block_size,
+    const std::optional<FormatSettings> & _format_settings) const
+{
+    const auto & format_header_getter = getCreators(name).input_format_header_creator;
+    if (!format_header_getter)
+        throw Exception("Format header " + name + " is not registered", ErrorCodes::LOGICAL_ERROR);
+
+    const Settings & settings = context.getSettingsRef();
+
+    auto format_settings = _format_settings
+        ? *_format_settings : getFormatSettings(context);
+
+    const RowInputFormatParams & params = getRowInputFormatParams(max_block_size, format_settings, settings);
+
+    return format_header_getter(buf, params, format_settings);
 }
 
 OutputFormatPtr FormatFactory::getOutputFormatParallelIfPossible(
@@ -323,9 +366,9 @@ String FormatFactory::getContentType(
     return format->getContentType();
 }
 
-bool FormatFactory::checkIfInputFormatSupportsSchemaInference(const String & name)
+bool FormatFactory::checkIfInputFormatSupportsFormatHeader(const String & name)
 {
-    return dict[name].supports_schema_inference;
+    return dict[name].input_with_format_header_processor_creator != nullptr;
 }
 
 void FormatFactory::registerInputFormat(const String & name, InputCreator input_creator)
@@ -336,12 +379,28 @@ void FormatFactory::registerInputFormat(const String & name, InputCreator input_
     target = std::move(input_creator);
 }
 
+void FormatFactory::registerInputFormatHeader(const String & name, InputFormatHeaderCreator format_header_creator)
+{
+    auto & target = dict[name].input_format_header_creator;
+    if (target)
+        throw Exception("FormatFactory: Input format header " + name + " is already registered", ErrorCodes::LOGICAL_ERROR);
+    target = std::move(format_header_creator);
+}
+
 void FormatFactory::registerNonTrivialPrefixAndSuffixChecker(const String & name, NonTrivialPrefixAndSuffixChecker non_trivial_prefix_and_suffix_checker)
 {
     auto & target = dict[name].non_trivial_prefix_and_suffix_checker;
     if (target)
         throw Exception("FormatFactory: Non trivial prefix and suffix checker " + name + " is already registered", ErrorCodes::LOGICAL_ERROR);
     target = std::move(non_trivial_prefix_and_suffix_checker);
+}
+
+void FormatFactory::registerInputFormatWithFormatHeaderProcessor(const String & name, InputWithFormatHeaderProcessorCreator input_creator)
+{
+    auto & target = dict[name].input_with_format_header_processor_creator;
+    if (target)
+        throw Exception("FormatFactory: Input format " + name + " with format header is already registered", ErrorCodes::LOGICAL_ERROR);
+    target = std::move(input_creator);
 }
 
 void FormatFactory::registerOutputFormat(const String & name, OutputCreator output_creator)
@@ -360,14 +419,6 @@ void FormatFactory::registerFileSegmentationEngine(const String & name, FileSegm
     target = std::move(file_segmentation_engine);
 }
 
-
-void FormatFactory::markInputFormatSupportsSchemaInference(const String & name)
-{
-    auto & target = dict[name].supports_schema_inference;
-    if (target)
-        throw Exception("FormatFactory: Input format " + name + " is already marked as supporting schema inference.", ErrorCodes::LOGICAL_ERROR);
-    target = true;
-}
 
 void FormatFactory::markOutputFormatSupportsParallelFormatting(const String & name)
 {
