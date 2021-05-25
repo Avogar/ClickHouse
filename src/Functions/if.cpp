@@ -622,7 +622,7 @@ private:
                 if (cond_array[i])
                     result_column->insertFrom(then_nested_column, 0);
                 else
-                    result_column->insertFrom(*col_else, i);
+                    result_column->insertFrom(*col_else, i);i
             }
         }
         else if (else_is_const)
@@ -929,7 +929,7 @@ public:
         return getLeastSupertype({arguments[1], arguments[2]});
     }
 
-    void executeShortCircuitArguments(ColumnsWithTypeAndName & arguments) const override
+    void executeShortCircuitArguments(ColumnsWithTypeAndName & arguments) const
     {
         int last_short_circuit_argument_index = checkShirtCircuitArguments(arguments);
         if (last_short_circuit_argument_index < 0)
@@ -942,12 +942,14 @@ public:
             IColumn::Filter mask;
             getMaskFromColumn(arguments[0].column, mask);
             maskedExecute(arguments[1], mask);
-            maskedExecute(arguments[2], mask, /*inverse=*/true);
+            maskedExecute(arguments[2], mask, /*inverted=*/true);
         }
     }
 
-    ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const override
+    ColumnPtr executeImpl(const ColumnsWithTypeAndName & args, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
+        ColumnsWithTypeAndName arguments = std::move(args);
+        executeShortCircuitArguments(arguments);
         ColumnPtr res;
         if (   (res = executeForConstAndNullableCondition(arguments, result_type, input_rows_count))
             || (res = executeForNullThenElse(arguments, result_type, input_rows_count))

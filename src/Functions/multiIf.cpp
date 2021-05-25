@@ -109,7 +109,7 @@ public:
         return getLeastSupertype(types_of_branches);
     }
 
-    void executeShortCircuitArguments(ColumnsWithTypeAndName & arguments) const override
+    void executeShortCircuitArguments(ColumnsWithTypeAndName & arguments) const
     {
         int last_short_circuit_argument_index = checkShirtCircuitArguments(arguments);
         if (last_short_circuit_argument_index < 0)
@@ -145,6 +145,8 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & args, const DataTypePtr & result_type, size_t input_rows_count) const override
     {
+        ColumnsWithTypeAndName arguments = std::move(args);
+        executeShortCircuitArguments(arguments);
         /** We will gather values from columns in branches to result column,
         *  depending on values of conditions.
         */
@@ -159,19 +161,19 @@ public:
         };
 
         std::vector<Instruction> instructions;
-        instructions.reserve(args.size() / 2 + 1);
+        instructions.reserve(arguments.size() / 2 + 1);
 
         Columns converted_columns_holder;
         converted_columns_holder.reserve(instructions.size());
 
         const DataTypePtr & return_type = result_type;
 
-        for (size_t i = 0; i < args.size(); i += 2)
+        for (size_t i = 0; i < arguments.size(); i += 2)
         {
             Instruction instruction;
             size_t source_idx = i + 1;
 
-            bool last_else_branch = source_idx == args.size();
+            bool last_else_branch = source_idx == arguments.size();
 
             if (last_else_branch)
             {
@@ -181,7 +183,7 @@ public:
             }
             else
             {
-                const ColumnWithTypeAndName & cond_col = args[i];
+                const ColumnWithTypeAndName & cond_col = arguments[i];
 
                 /// We skip branches that are always false.
                 /// If we encounter a branch that is always true, we can finish.
@@ -209,7 +211,7 @@ public:
                 }
             }
 
-            const ColumnWithTypeAndName & source_col = args[source_idx];
+            const ColumnWithTypeAndName & source_col = arguments[source_idx];
             if (source_col.type->equals(*return_type))
             {
                 instruction.source = source_col.column.get();

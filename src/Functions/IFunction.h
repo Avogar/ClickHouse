@@ -210,8 +210,8 @@ public:
     virtual bool hasInformationAboutMonotonicity() const { return false; }
 
     /** Function is called "short-circuit" if it's arguments can be evaluated lazily
-      * (examples: and, or, if, multiIf). If function is short circuit, it must
-      *  implement method executeShortCircuitArguments for lazy arguments execution,
+      * (examples: and, or, if, multiIf). If function is short circuit, it should be
+      *  able to work with lazy executed arguments,
       *  this method will be called before function execution.
       */
     virtual bool isShortCircuit() const { return false; }
@@ -222,15 +222,6 @@ public:
       * Suitability may depend on function arguments.
       */
     virtual bool isSuitableForShortCircuitArgumentsExecution(ColumnsWithTypeAndName & /*arguments*/) const = 0;
-
-    /** Method for lazy arguments execution in short-circuit functions.
-      * Lazy argument is presented as ColumnFunction with isShortCircuitArgument() = true.
-      * This method is called before function execution.
-      */
-    virtual void executeShortCircuitArguments(ColumnsWithTypeAndName & /*arguments*/) const
-    {
-        throw Exception("Function " + getName() + " doesn't support short circuit execution", ErrorCodes::NOT_IMPLEMENTED);
-    }
 
     /// The property of monotonicity for a certain range.
     struct Monotonicity
@@ -268,8 +259,6 @@ public:
     DataTypePtr getReturnType(const ColumnsWithTypeAndName & arguments) const;
 
     void getLambdaArgumentTypes(DataTypes & arguments) const;
-
-    void checkNumberOfArguments(size_t number_of_arguments) const;
 
     /// Get the main function name.
     virtual String getName() const = 0;
@@ -351,6 +340,8 @@ protected:
 
 private:
 
+    void checkNumberOfArguments(size_t number_of_arguments) const;
+
     DataTypePtr getReturnTypeWithoutLowCardinality(const ColumnsWithTypeAndName & arguments) const;
 };
 
@@ -414,10 +405,6 @@ public:
     virtual bool isStateful() const { return false; }
     virtual bool isShortCircuit() const { return false; }
     virtual bool isSuitableForShortCircuitArgumentsExecution(ColumnsWithTypeAndName & /*arguments*/) const = 0;
-    virtual void executeShortCircuitArguments(ColumnsWithTypeAndName & /*arguments*/) const
-    {
-        throw Exception("Function " + getName() + " doesn't support short circuit execution", ErrorCodes::NOT_IMPLEMENTED);
-    }
 
     virtual bool hasInformationAboutMonotonicity() const { return false; }
 

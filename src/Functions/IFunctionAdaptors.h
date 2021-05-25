@@ -84,11 +84,6 @@ public:
 
     bool isSuitableForShortCircuitArgumentsExecution(ColumnsWithTypeAndName & args) const override { return function->isSuitableForShortCircuitArgumentsExecution(args); }
 
-    void executeShortCircuitArguments(ColumnsWithTypeAndName & args) const override
-    {
-        function->executeShortCircuitArguments(args);
-    }
-
     bool hasInformationAboutMonotonicity() const override { return function->hasInformationAboutMonotonicity(); }
 
     Monotonicity getMonotonicityForRange(const IDataType & type, const Field & left, const Field & right) const override

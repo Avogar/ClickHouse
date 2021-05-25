@@ -111,20 +111,29 @@ void ExpressionActions::rewriteArgumentsForShortCircuitFunctions(
             /// have map need_outside: node -> is this node used somewhere else.
             std::unordered_map<const ActionsDAG::Node *, bool> need_outside;
             std::deque<const ActionsDAG::Node *> queue;
-            for (const auto * child : node.children)
-                queue.push_back(child);
+
+            size_t i = 0;
+            if (node.children.size() != 1)
+                i = 1;
+
+            for (; i < node.children.size(); ++i)
+            {
+                /// Prevent multiple execution in cases like expr AND expr AND expr
+                if (node.children[i] != node.children[0])
+                    queue.push_back(node.children[i]);
+            }
+
+            bool dont_rewrite_common_descendants = (node.function_base->getName() == "if");
 
             need_outside[&node] = false;
             while (!queue.empty())
             {
                 const ActionsDAG::Node * cur = queue.front();
                 queue.pop_front();
-                /// If we've already visited this action, just continue.
-                if (need_outside.contains(cur))
-                    continue;
+
                 bool is_need_outside = false;
                 /// If action is used in result, we can't enable lazy execution.
-                if (data[reverse_index.at(cur)].used_in_result)
+                if (data[reverse_index.at(cur)].used_in_result || (dont_rewrite_common_descendants && need_outside.contains(cur)))
                     is_need_outside = true;
                 else
                 {
@@ -142,7 +151,7 @@ void ExpressionActions::rewriteArgumentsForShortCircuitFunctions(
                 /// If this action is needed outside, all it's descendants are also needed outside
                 /// and we don't have to add them in queue (if action is not in need_outside we
                 /// treat it as it's needed outside).
-                if (!is_need_outside)
+                if (!is_need_outside || dont_rewrite_common_descendants)
                 {
                     for (const auto * child : cur->children)
                         queue.push_back(child);
@@ -440,7 +449,7 @@ static void executeAction(const ExpressionActions::Action & action, ExecutionCon
             ///  - It's is enabled and function is suitable for lazy execution or it has lazy executed arguments.
             if (action.node->lazy_execution == ActionsDAG::LazyExecution::FORCE_ENABLED
                 || (action.node->lazy_execution == ActionsDAG::LazyExecution::ENABLED
-                    && (action.node->function_base->isSuitableForShortCircuitArgumentsExecution(arguments) || checkShirtCircuitArguments(arguments) >= 0)))
+                    ))
             {
                 res_column.column = ColumnFunction::create(num_rows, action.node->function_base, std::move(arguments), true);
             }
@@ -450,8 +459,8 @@ static void executeAction(const ExpressionActions::Action & action, ExecutionCon
                 if (action.node->is_function_compiled)
                     ProfileEvents::increment(ProfileEvents::CompiledFunctionExecute);
 
-                if (action.node->function_base->isShortCircuit())
-                    action.node->function_base->executeShortCircuitArguments(arguments);
+//                if (action.node->function_base->isShortCircuit())
+//                    action.node->function_base->executeShortCircuitArguments(arguments);
 
                 res_column.column = action.node->function->execute(arguments, res_column.type, num_rows, dry_run);
             }

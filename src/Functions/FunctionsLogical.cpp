@@ -12,6 +12,9 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
+#include <Columns/ColumnNothing.h>
+
+#include <common/logger_useful.h>
 
 #include <algorithm>
 
@@ -527,7 +530,7 @@ void FunctionAnyArityLogical<Impl, Name>::executeShortCircuitArguments(ColumnsWi
 
     /// Set null_value according to ternary logic.
     UInt8 null_value = Name::name == NameAnd::name ? 1 : 0;
-    bool inverse = Name::name != NameAnd::name;
+    bool inverted = Name::name != NameAnd::name;
     UInt8 default_value_in_expanding = Name::name == NameAnd::name ? 0 : 1;
     executeColumnIfNeeded(arguments[0]);
 
@@ -535,16 +538,54 @@ void FunctionAnyArityLogical<Impl, Name>::executeShortCircuitArguments(ColumnsWi
     IColumn::Filter * mask_used_in_expanding = nullptr;
     for (int i = 1; i <= last_short_circuit_argument_index; ++i)
     {
-        getMaskFromColumn(arguments[i - 1].column, mask, inverse, mask_used_in_expanding, default_value_in_expanding, false, null_value);
+        getMaskFromColumn(arguments[i - 1].column, mask, inverted, mask_used_in_expanding, default_value_in_expanding, false, null_value);
         maskedExecute(arguments[i], mask);
         mask_used_in_expanding = &mask;
     }
 }
 
 template <typename Impl, typename Name>
-ColumnPtr FunctionAnyArityLogical<Impl, Name>::executeImpl(
-    const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count) const
+static ColumnPtr executeShortCircuit(ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type)
 {
+    UInt8 null_value = Name::name == NameAnd::name ? 1 : 0;
+    bool inverted = Name::name != NameAnd::name;
+    UInt8 default_value_in_expanding = Name::name == NameAnd::name ? 0 : 1;
+    executeColumnIfNeeded(arguments[0]);
+    bool has_nullable = result_type->isNullable();
+
+    IColumn::Filter mask;
+    IColumn::Filter * mask_used_in_expanding = nullptr;
+    std::unique_ptr<IColumn::Filter> nulls;
+    if (has_nullable)
+        nulls = std::make_unique<IColumn::Filter>(arguments[0].column->size(), 0);
+
+    bool is_expanded = true;
+    for (size_t i = 1; i < arguments.size(); ++i)
+    {
+        getMaskFromColumn(arguments[i - 1].column, mask, inverted, mask_used_in_expanding, default_value_in_expanding, false, null_value, nullptr, is_expanded, nulls.get());
+        is_expanded = maskedExecute(arguments[i], mask, false, false);
+        has_nullable |= arguments[i].column->isNullable();
+        mask_used_in_expanding = &mask;
+    }
+    getMaskFromColumn(arguments[arguments.size() - 1].column, mask, false, mask_used_in_expanding, default_value_in_expanding, false, null_value, nullptr, is_expanded, nulls.get());
+    MutableColumnPtr res = ColumnUInt8::create();
+    typeid_cast<ColumnUInt8 *>(res.get())->getData() = std::move(mask);
+    if (!has_nullable)
+        return res;
+    MutableColumnPtr bytemap = ColumnUInt8::create();
+    typeid_cast<ColumnUInt8 *>(bytemap.get())->getData() = std::move(*nulls);
+    return ColumnNullable::create(std::move(res), std::move(bytemap));
+}
+
+template <typename Impl, typename Name>
+ColumnPtr FunctionAnyArityLogical<Impl, Name>::executeImpl(
+    const ColumnsWithTypeAndName & args, const DataTypePtr & result_type, size_t input_rows_count) const
+{
+    ColumnsWithTypeAndName arguments = std::move(args);
+    if (checkShirtCircuitArguments(arguments) != -1)
+        return executeShortCircuit<Impl, Name>(arguments, result_type);
+
+//    executeShortCircuitArguments(arguments);
     ColumnRawPtrs args_in;
     for (const auto & arg_index : arguments)
         args_in.push_back(arg_index.column.get());

@@ -155,7 +155,7 @@ public:
 
     bool isVariadic() const override { return true; }
     bool isShortCircuit() const override { return name == NameAnd::name || name == NameOr::name; }
-    void executeShortCircuitArguments(ColumnsWithTypeAndName & arguments) const override;
+    void executeShortCircuitArguments(ColumnsWithTypeAndName & arguments) const;
     bool isSuitableForShortCircuitArgumentsExecution(ColumnsWithTypeAndName & /*arguments*/) const override { return false; }
     size_t getNumberOfArguments() const override { return 0; }
 
