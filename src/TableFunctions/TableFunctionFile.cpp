@@ -25,8 +25,7 @@ StoragePtr TableFunctionFile::getStorage(const String & source,
         compression_method_,
         columns,
         ConstraintsDescription{},
-        String{},
-        global_context
+        String{}
     };
 
     return StorageFile::create(source, global_context->getUserFilesPath(), args);
