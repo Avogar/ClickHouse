@@ -202,7 +202,7 @@ InputFormatPtr FormatFactory::getInput(
     const String & name,
     ReadBuffer & buf,
     IInputFormatHeader & format_header,
-    const Context & context,
+    ContextConstPtr context,
     UInt64 max_block_size,
     const std::optional<FormatSettings> & format_settings) const
 {
@@ -320,7 +320,7 @@ InputFormatPtr FormatFactory::getInputFormat(
     const String & name,
     ReadBuffer & buf,
     IInputFormatHeader & format_header,
-    const Context & context,
+    ContextConstPtr context,
     UInt64 max_block_size,
     const std::optional<FormatSettings> & _format_settings) const
 {
@@ -328,7 +328,7 @@ InputFormatPtr FormatFactory::getInputFormat(
     if (!input_getter)
         throw Exception("Format " + name + " is not suitable for input with format header", ErrorCodes::FORMAT_IS_NOT_SUITABLE_FOR_INPUT);
 
-    const Settings & settings = context.getSettingsRef();
+    const Settings & settings = context->getSettingsRef();
 
     auto format_settings = _format_settings
         ? *_format_settings : getFormatSettings(context);
@@ -347,7 +347,7 @@ InputFormatPtr FormatFactory::getInputFormat(
 InputFormatHeaderPtr FormatFactory::getInputFormatHeader(
     const String & name,
     ReadBuffer & buf,
-    const Context & context,
+    ContextConstPtr context,
     UInt64 max_block_size,
     const std::optional<FormatSettings> & _format_settings) const
 {
@@ -355,7 +355,7 @@ InputFormatHeaderPtr FormatFactory::getInputFormatHeader(
     if (!format_header_getter)
         throw Exception("Format header " + name + " is not registered", ErrorCodes::LOGICAL_ERROR);
 
-    const Settings & settings = context.getSettingsRef();
+    const Settings & settings = context->getSettingsRef();
 
     auto format_settings = _format_settings
         ? *_format_settings : getFormatSettings(context);
