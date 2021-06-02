@@ -323,11 +323,11 @@ public:
     StorageFileSource(
         std::shared_ptr<StorageFile> storage_,
         const StorageMetadataPtr & metadata_snapshot_,
-        const Context & context_,
+        ContextPtr context_,
         UInt64 max_block_size_,
         FilesInfoPtr files_info_,
         ColumnsDescription columns_description_)
-        : StorageFileSource(storage_, std::nullopt, metadata_snapshot_, context_, max_block_size_, files_info_, columns_description_)
+        : StorageFileSource(storage_, {}, metadata_snapshot_, context_, max_block_size_, files_info_, columns_description_)
     {
     }
 
@@ -732,6 +732,7 @@ void registerStorageFile(StorageFactory & factory)
                 {},
                 {},
                 {},
+                {},
                 factory_args.columns,
                 factory_args.constraints,
                 factory_args.comment
@@ -834,7 +835,7 @@ void registerStorageFile(StorageFactory & factory)
                 }
                 else
                 {
-                    auto paths = StorageFile::getPathsList(source_path, factory_args.context.getUserFilesPath(), storage_args.context);
+                    auto paths = StorageFile::getPathsList(source_path, factory_args.getContext()->getUserFilesPath(), storage_args.getContext());
                     String first_path = paths[0];
                     nested_buffer = std::make_unique<ReadBufferFromFile>(first_path);
                     method = chooseCompressionMethod(first_path, storage_args.compression_method);
@@ -849,7 +850,7 @@ void registerStorageFile(StorageFactory & factory)
                                     ErrorCodes::LOGICAL_ERROR);
 
                 auto format_header = format_factory.getInputFormatHeader(
-                    storage_args.format_name, *read_buf, storage_args.context, 0, storage_args.format_settings);
+                    storage_args.format_name, *read_buf, storage_args.getContext(), 0, storage_args.format_settings);
 
                 format_header->readPrefix();
                 Block sample_block = format_header->getHeader();
