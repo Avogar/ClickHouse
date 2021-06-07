@@ -20,12 +20,12 @@ namespace ErrorCodes
 }
 
 
-template <typename Impl, typename Name, typename ResultType, bool is_suitable_for_short_circuit_arguments_execution = false>
+template <typename Impl, typename Name, typename ResultType, bool is_suitable_for_short_circuit_arguments_execution = true>
 class FunctionStringOrArrayToT : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    static FunctionPtr create(ContextConstPtr)
+    static FunctionPtr create(ContextPtr)
     {
         return std::make_shared<FunctionStringOrArrayToT>();
     }
@@ -42,7 +42,7 @@ public:
 
     bool isSuitableForShortCircuitArgumentsExecution(ColumnsWithTypeAndName & /*arguments*/) const override
     {
-        return true;
+        return is_suitable_for_short_circuit_arguments_execution;
     }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override

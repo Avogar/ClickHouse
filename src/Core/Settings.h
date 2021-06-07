@@ -472,7 +472,7 @@ class IColumn;
     M(UInt64, limit, 0, "Limit on read rows from the most 'end' result for select query, default 0 means no limit length", 0) \
     M(UInt64, offset, 0, "Offset on read rows from the most 'end' result for select query", 0) \
     \
-    M(Bool, use_short_circuit_function_evaluation, true, "", 0) \
+    M(Bool, use_short_circuit_function_evaluation, true, "Enable short-circuit function evaluation", 0) \
     \
     /** Experimental functions */ \
     M(Bool, allow_experimental_funnel_functions, false, "Enable experimental functions for funnel analysis.", 0) \
