@@ -15,7 +15,7 @@
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnNullable.h>
-#include <Columns/ColumnFunction.h>
+#include <Columns/MaskOperations.h>
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
 #include <Functions/IFunction.h>
@@ -25,8 +25,6 @@
 #include <Functions/FunctionIfBase.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/castColumn.h>
-
-#include <Columns/MaskOperations.h>
 
 
 namespace DB
@@ -215,7 +213,7 @@ class FunctionIf : public FunctionIfBase
 {
 public:
     static constexpr auto name = "if";
-    static FunctionPtr create(ContextConstPtr) { return std::make_shared<FunctionIf>(); }
+    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionIf>(); }
 
 private:
     template <typename T0, typename T1>

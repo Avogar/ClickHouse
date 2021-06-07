@@ -3,14 +3,13 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnsNumber.h>
+#include <Columns/MaskOperations.h>
 #include <Interpreters/castColumn.h>
 #include <Common/typeid_cast.h>
 #include <Common/assert_cast.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/getLeastSupertype.h>
-#include <Columns/MaskOperations.h>
 
-#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -37,7 +36,7 @@ class FunctionMultiIf final : public FunctionIfBase
 {
 public:
     static constexpr auto name = "multiIf";
-    static FunctionPtr create(ContextConstPtr) { return std::make_shared<FunctionMultiIf>(); }
+    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionMultiIf>(); }
 
     String getName() const override { return name; }
     bool isVariadic() const override { return true; }
@@ -91,7 +90,7 @@ public:
                 if (arg->onlyNull())
                     return;
 
-                const DataTypeNullable & nullable_type = static_cast<const DataTypeNullable &>(*arg);
+                const DataTypeNullable & nullable_type = typeid_cast<const DataTypeNullable &>(*arg);
                 nested_type = nullable_type.getNestedType().get();
             }
             else
