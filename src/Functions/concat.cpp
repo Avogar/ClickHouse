@@ -33,8 +33,8 @@ class ConcatImpl : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    explicit ConcatImpl(ContextConstPtr context_) : context(context_) {}
-    static FunctionPtr create(ContextConstPtr context) { return std::make_shared<ConcatImpl>(context); }
+    explicit ConcatImpl(ContextPtr context_) : context(context_) {}
+    static FunctionPtr create(ContextPtr context) { return std::make_shared<ConcatImpl>(context); }
 
     String getName() const override { return name; }
 
@@ -87,7 +87,7 @@ public:
     }
 
 private:
-    ContextWeakConstPtr context;
+    ContextWeakPtr context;
 
     ColumnPtr executeBinary(const ColumnsWithTypeAndName & arguments, size_t input_rows_count) const
     {
@@ -193,9 +193,9 @@ class ConcatOverloadResolver : public IFunctionOverloadResolver
 {
 public:
     static constexpr auto name = "concat";
-    static FunctionOverloadResolverPtr create(ContextConstPtr context) { return std::make_unique<ConcatOverloadResolver>(context); }
+    static FunctionOverloadResolverPtr create(ContextPtr context) { return std::make_unique<ConcatOverloadResolver>(context); }
 
-    explicit ConcatOverloadResolver(ContextConstPtr context_) : context(context_) {}
+    explicit ConcatOverloadResolver(ContextPtr context_) : context(context_) {}
 
     String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 0; }
@@ -225,7 +225,7 @@ public:
     }
 
 private:
-    ContextConstPtr context;
+    ContextPtr context;
 };
 
 }

@@ -147,7 +147,7 @@ template <typename Name>
 class FunctionStartsEndsWith : public TargetSpecific::Default::FunctionStartsEndsWith<Name>
 {
 public:
-    explicit FunctionStartsEndsWith(ContextConstPtr context) : selector(context)
+    explicit FunctionStartsEndsWith(ContextPtr context) : selector(context)
     {
         selector.registerImplementation<TargetArch::Default,
             TargetSpecific::Default::FunctionStartsEndsWith<Name>>();
@@ -169,7 +169,7 @@ public:
         return selector.selectAndExecute(arguments, result_type, input_rows_count);
     }
 
-    static FunctionPtr create(ContextConstPtr context)
+    static FunctionPtr create(ContextPtr context)
     {
         return std::make_shared<FunctionStartsEndsWith<Name>>(context);
     }

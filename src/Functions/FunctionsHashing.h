@@ -535,7 +535,7 @@ class FunctionStringHashFixedString : public IFunction
 {
 public:
     static constexpr auto name = Impl::name;
-    static FunctionPtr create(ContextConstPtr) { return std::make_shared<FunctionStringHashFixedString>(); }
+    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionStringHashFixedString>(); }
 
     String getName() const override
     {
@@ -704,7 +704,7 @@ template <typename Impl, typename Name>
 class FunctionIntHash : public TargetSpecific::Default::FunctionIntHash<Impl, Name>
 {
 public:
-    explicit FunctionIntHash(ContextConstPtr context) : selector(context)
+    explicit FunctionIntHash(ContextPtr context) : selector(context)
     {
         selector.registerImplementation<TargetArch::Default,
             TargetSpecific::Default::FunctionIntHash<Impl, Name>>();
@@ -722,7 +722,7 @@ public:
         return selector.selectAndExecute(arguments, result_type, input_rows_count);
     }
 
-    static FunctionPtr create(ContextConstPtr context)
+    static FunctionPtr create(ContextPtr context)
     {
         return std::make_shared<FunctionIntHash>(context);
     }
@@ -1082,7 +1082,7 @@ template <typename Impl>
 class FunctionAnyHash : public TargetSpecific::Default::FunctionAnyHash<Impl>
 {
 public:
-    explicit FunctionAnyHash(ContextConstPtr context) : selector(context)
+    explicit FunctionAnyHash(ContextPtr context) : selector(context)
     {
         selector.registerImplementation<TargetArch::Default,
             TargetSpecific::Default::FunctionAnyHash<Impl>>();
@@ -1100,7 +1100,7 @@ public:
         return selector.selectAndExecute(arguments, result_type, input_rows_count);
     }
 
-    static FunctionPtr create(ContextConstPtr context)
+    static FunctionPtr create(ContextPtr context)
     {
         return std::make_shared<FunctionAnyHash>(context);
     }
@@ -1187,7 +1187,7 @@ class FunctionURLHash : public IFunction
 {
 public:
     static constexpr auto name = "URLHash";
-    static FunctionPtr create(ContextConstPtr) { return std::make_shared<FunctionURLHash>(); }
+    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionURLHash>(); }
 
     String getName() const override { return name; }
 

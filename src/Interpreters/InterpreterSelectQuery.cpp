@@ -134,7 +134,7 @@ String InterpreterSelectQuery::generateFilterActions(ActionsDAGPtr & actions, co
     tables->children.push_back(tables_elem);
     tables_elem->table_expression = table_expr;
     tables_elem->children.push_back(table_expr);
-    table_expr->database_and_table_name = createTableIdentifier(db_name, table_name);
+    table_expr->database_and_table_name = std::make_shared<ASTTableIdentifier>(db_name, table_name);
     table_expr->children.push_back(table_expr->database_and_table_name);
 
     /// Using separate expression analyzer to prevent any possible alias injection
@@ -1742,7 +1742,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         && processing_stage == QueryProcessingStage::FetchColumns
         && query_analyzer->hasAggregation()
         && (query_analyzer->aggregates().size() == 1)
-        && typeid_cast<AggregateFunctionCount *>(query_analyzer->aggregates()[0].function.get());
+        && typeid_cast<const AggregateFunctionCount *>(query_analyzer->aggregates()[0].function.get());
 
     if (optimize_trivial_count)
     {
@@ -1766,7 +1766,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
 
         if (num_rows)
         {
-            AggregateFunctionCount & agg_count = static_cast<AggregateFunctionCount &>(*func);
+            const AggregateFunctionCount & agg_count = static_cast<const AggregateFunctionCount &>(*func);
 
             /// We will process it up to "WithMergeableState".
             std::vector<char> state(agg_count.sizeOfData());
