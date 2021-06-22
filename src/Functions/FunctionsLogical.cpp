@@ -7,11 +7,11 @@
 #include <Columns/ColumnsNumber.h>
 #include <Columns/IColumn.h>
 #include <Columns/MaskOperations.h>
+#include <Common/FieldVisitorConvertToNumber.h>
+#include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionHelpers.h>
-#include <Common/FieldVisitors.h>
-#include <Common/typeid_cast.h>
 
 #include <algorithm>
 
