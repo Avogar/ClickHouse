@@ -274,6 +274,7 @@ namespace DB
         FOR_ARROW_TYPES(DISPATCH)
 #undef DISPATCH
 
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot fill arrow array with {} data.", column_type->getName());
     }
 
     template <typename ColumnType>

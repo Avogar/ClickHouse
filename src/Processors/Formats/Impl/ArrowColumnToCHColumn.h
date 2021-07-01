@@ -22,7 +22,11 @@ namespace DB
 class ArrowColumnToCHColumn
 {
 public:
-    ArrowColumnToCHColumn(const Block & header_, std::shared_ptr<arrow::Schema> schema_, const std::string & format_name_);
+    ArrowColumnToCHColumn(const Block & header_, const std::string & format_name_, bool import_nested_);
+
+    /// Create header by arrow schema. It will be useful for inserting
+    /// data from file without knowing table structure.
+    ArrowColumnToCHColumn(const arrow::Schema & schema, const std::string & format_name, bool import_nested_);
 
     void arrowTableToCHChunk(Chunk & res, std::shared_ptr<arrow::Table> & table);
 
@@ -51,13 +55,13 @@ private:
         M(arrow::Type::INT64, DB::UInt64)
 
 
-    const Block & header;
-    std::unordered_map<std::string, DataTypePtr> name_to_internal_type;
+    const Block header;
     const std::string format_name;
+    bool import_nested;
     /// Map {column name : dictionary column}.
     /// To avoid converting dictionary from Arrow Dictionary
     /// to LowCardinality every chunk we save it and reuse.
-    std::unordered_map<std::string, ColumnPtr> dictionary_values;
+    std::unordered_map<std::string, std::shared_ptr<ColumnWithTypeAndName>> dictionary_values;
 };
 }
 #endif
