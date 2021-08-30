@@ -82,6 +82,8 @@ protected:
 private:
     explicit StorageFile(CommonArguments args);
 
+    void fillStorageMetadata(CommonArguments args);
+
     std::string format_name;
     // We use format settings from global context + CREATE query for File table
     // function -- in this case, format_settings is set.

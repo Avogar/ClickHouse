@@ -130,6 +130,57 @@ void checkCreationIsAllowed(ContextPtr context_global, const std::string & db_di
     if (fs::exists(table_path) && fs::is_directory(table_path))
         throw Exception("File must not be a directory", ErrorCodes::INCORRECT_FILE_NAME);
 }
+
+std::unique_ptr<ReadBuffer> createReadBuffer(
+    const String & current_path,
+    bool use_table_fd,
+    const String & storage_name,
+    int table_fd,
+    const String & compression_method,
+    ContextPtr context)
+{
+    std::unique_ptr<ReadBuffer> nested_buffer;
+    CompressionMethod method;
+
+    struct stat file_stat{};
+
+    if (use_table_fd)
+    {
+        /// Check if file descriptor allows random reads (and reading it twice).
+        if (0 != fstat(table_fd, &file_stat))
+            throwFromErrno("Cannot stat table file descriptor, inside " + storage_name, ErrorCodes::CANNOT_STAT);
+
+        if (S_ISREG(file_stat.st_mode))
+            nested_buffer = std::make_unique<ReadBufferFromFileDescriptorPRead>(table_fd);
+        else
+            nested_buffer = std::make_unique<ReadBufferFromFileDescriptor>(table_fd);
+
+        method = chooseCompressionMethod("", compression_method);
+    }
+    else
+    {
+        /// Check if file descriptor allows random reads (and reading it twice).
+        if (0 != stat(current_path.c_str(), &file_stat))
+            throwFromErrno("Cannot stat file " + current_path, ErrorCodes::CANNOT_STAT);
+
+        if (S_ISREG(file_stat.st_mode))
+            nested_buffer = std::make_unique<ReadBufferFromFilePRead>(current_path, context->getSettingsRef().max_read_buffer_size);
+        else
+            nested_buffer = std::make_unique<ReadBufferFromFile>(current_path, context->getSettingsRef().max_read_buffer_size);
+
+        method = chooseCompressionMethod(current_path, compression_method);
+    }
+
+    /// For clickhouse-local add progress callback to display progress bar.
+    if (context->getApplicationType() == Context::ApplicationType::LOCAL)
+    {
+        auto & in = static_cast<ReadBufferFromFileDescriptor &>(*nested_buffer);
+        in.setProgressCallback(context);
+    }
+
+    return wrapReadBufferWithCompressionMethod(std::move(nested_buffer), method);
+}
+
 }
 
 Strings StorageFile::getPathsList(const String & table_path, const String & user_files_path, ContextPtr context, size_t & total_bytes_to_read)
@@ -202,6 +253,8 @@ StorageFile::StorageFile(const std::string & table_path_, const std::string & us
         storage_metadata.setColumns(columns);
         setInMemoryMetadata(storage_metadata);
     }
+
+    fillStorageMetadata(args);
 }
 
 StorageFile::StorageFile(const std::string & relative_table_dir_path, CommonArguments args)
@@ -217,6 +270,8 @@ StorageFile::StorageFile(const std::string & relative_table_dir_path, CommonArgu
     paths = {getTablePath(table_dir_path, format_name)};
     if (fs::exists(paths[0]))
         total_bytes_to_read = fs::file_size(paths[0]);
+
+    fillStorageMetadata(args);
 }
 
 StorageFile::StorageFile(CommonArguments args)
@@ -226,10 +281,33 @@ StorageFile::StorageFile(CommonArguments args)
     , compression_method(args.compression_method)
     , base_path(args.getContext()->getPath())
 {
-    StorageInMemoryMetadata storage_metadata;
-    if (args.format_name != "Distributed")
-        storage_metadata.setColumns(args.columns);
+}
 
+void StorageFile::fillStorageMetadata(CommonArguments args)
+{
+    StorageInMemoryMetadata storage_metadata;
+
+    if (args.format_name != "Distributed")
+    {
+        if (!args.columns.empty())
+            storage_metadata.setColumns(args.columns);
+        else
+        {
+            if (FormatFactory::instance().checkIfFormatHasSchemaReader(args.format_name))
+            {
+                auto read_buf = createReadBuffer(paths.empty() ? "" : paths[0], use_table_fd, getName(), table_fd, compression_method, args.getContext());
+                auto header_reader = FormatFactory::instance().getSchemaReader(args.format_name);
+                NamesAndTypesList names_and_types = header_reader(*read_buf);
+                storage_metadata.setColumns(ColumnsDescription(names_and_types));
+            }
+            else
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot extract table structure from {} file format", args.format_name);
+        }
+    }
+
+    //    if (args.format_name != "Distributed" && !args.columns.empty())
+    //        storage_metadata.setColumns(args.columns);
+    //
     storage_metadata.setConstraints(args.constraints);
     storage_metadata.setComment(args.comment);
     setInMemoryMetadata(storage_metadata);
@@ -343,46 +421,7 @@ public:
                     }
                 }
 
-                std::unique_ptr<ReadBuffer> nested_buffer;
-                CompressionMethod method;
-
-                struct stat file_stat{};
-
-                if (storage->use_table_fd)
-                {
-                    /// Check if file descriptor allows random reads (and reading it twice).
-                    if (0 != fstat(storage->table_fd, &file_stat))
-                        throwFromErrno("Cannot stat table file descriptor, inside " + storage->getName(), ErrorCodes::CANNOT_STAT);
-
-                    if (S_ISREG(file_stat.st_mode))
-                        nested_buffer = std::make_unique<ReadBufferFromFileDescriptorPRead>(storage->table_fd);
-                    else
-                        nested_buffer = std::make_unique<ReadBufferFromFileDescriptor>(storage->table_fd);
-
-                    method = chooseCompressionMethod("", storage->compression_method);
-                }
-                else
-                {
-                    /// Check if file descriptor allows random reads (and reading it twice).
-                    if (0 != stat(current_path.c_str(), &file_stat))
-                        throwFromErrno("Cannot stat file " + current_path, ErrorCodes::CANNOT_STAT);
-
-                    if (S_ISREG(file_stat.st_mode))
-                        nested_buffer = std::make_unique<ReadBufferFromFilePRead>(current_path, context->getSettingsRef().max_read_buffer_size);
-                    else
-                        nested_buffer = std::make_unique<ReadBufferFromFile>(current_path, context->getSettingsRef().max_read_buffer_size);
-
-                    method = chooseCompressionMethod(current_path, storage->compression_method);
-                }
-
-                /// For clickhouse-local add progress callback to display progress bar.
-                if (context->getApplicationType() == Context::ApplicationType::LOCAL)
-                {
-                    auto & in = static_cast<ReadBufferFromFileDescriptor &>(*nested_buffer);
-                    in.setProgressCallback(context);
-                }
-
-                read_buf = wrapReadBufferWithCompressionMethod(std::move(nested_buffer), method);
+                read_buf = createReadBuffer(current_path, storage->use_table_fd, storage->getName(), storage->table_fd, storage->compression_method, context);
 
                 auto get_block_for_format = [&]() -> Block
                 {

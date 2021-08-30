@@ -365,6 +365,13 @@ OutputFormatPtr FormatFactory::getOutputFormat(
     return format;
 }
 
+FormatFactory::SchemaReader FormatFactory::getSchemaReader(const String & name) const
+{
+    auto & header_reader = dict.at(name).header_reader;
+    if (!header_reader)
+        throw Exception("FormatFactory: Format " + name + " doesn't support schema interface.", ErrorCodes::LOGICAL_ERROR);
+    return header_reader;
+}
 
 void FormatFactory::registerInputFormat(const String & name, InputCreator input_creator)
 {
@@ -414,6 +421,13 @@ void FormatFactory::registerFileSegmentationEngine(const String & name, FileSegm
     target = std::move(file_segmentation_engine);
 }
 
+void FormatFactory::registerSchemaReader(const String & name, SchemaReader header_reader)
+{
+    auto & target = dict[name].header_reader;
+    if (target)
+        throw Exception("FormatFactory: Input header reader " + name + " is already registered", ErrorCodes::LOGICAL_ERROR);
+    target = std::move(header_reader);
+}
 
 void FormatFactory::markOutputFormatSupportsParallelFormatting(const String & name)
 {
@@ -438,6 +452,13 @@ bool FormatFactory::checkIfFormatIsColumnOriented(const String & name)
     const auto & target = getCreators(name);
     return target.is_column_oriented;
 }
+
+bool FormatFactory::checkIfFormatHasSchemaReader(const String & name)
+{
+    const auto & target = getCreators(name);
+    return bool(target.header_reader);
+}
+
 
 FormatFactory & FormatFactory::instance()
 {

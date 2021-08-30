@@ -6,6 +6,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <IO/BufferWithOwnMemory.h>
 #include <common/types.h>
+#include <Core/NamesAndTypes.h>
 
 #include <boost/noncopyable.hpp>
 
@@ -64,6 +65,8 @@ public:
     using WriteCallback = std::function<void(
         const Columns & columns,
         size_t row)>;
+    
+    using SchemaReader = std::function<NamesAndTypesList(ReadBuffer & buf)>;
 
 private:
     using InputCreator = std::function<BlockInputStreamPtr(
@@ -105,6 +108,7 @@ private:
         InputProcessorCreator input_processor_creator;
         OutputProcessorCreator output_processor_creator;
         FileSegmentationEngine file_segmentation_engine;
+        SchemaReader header_reader;
         bool supports_parallel_formatting{false};
         bool is_column_oriented{false};
         NonTrivialPrefixAndSuffixChecker non_trivial_prefix_and_suffix_checker;
@@ -166,6 +170,10 @@ public:
         ContextPtr context,
         WriteCallback callback = {},
         const std::optional<FormatSettings> & format_settings = std::nullopt) const;
+    
+    SchemaReader getSchemaReader(
+        const String & name
+        ) const;
 
     /// Register format by its name.
     void registerInputFormat(const String & name, InputCreator input_creator);
@@ -177,10 +185,14 @@ public:
     void registerInputFormatProcessor(const String & name, InputProcessorCreator input_creator);
     void registerOutputFormatProcessor(const String & name, OutputProcessorCreator output_creator);
 
+    void registerSchemaReader(const String & name, SchemaReader header_reader);
+
     void markOutputFormatSupportsParallelFormatting(const String & name);
     void markFormatAsColumnOriented(const String & name);
 
     bool checkIfFormatIsColumnOriented(const String & name);
+
+    bool checkIfFormatHasSchemaReader(const String & name);
 
     const FormatsDictionary & getAllFormats() const
     {

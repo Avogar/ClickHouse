@@ -16,6 +16,7 @@
 
 #include <DataStreams/IBlockInputStream.h>
 
+#include <Formats/FormatFactory.h>
 
 namespace DB
 {
@@ -51,7 +52,11 @@ void ITableFunctionFileLike::parseArguments(const ASTPtr & ast_function, Context
     {
         if (format == "Distributed")
             return;
-        throw Exception("Table function '" + getName() + "' allows 2 arguments only for Distributed format.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        if (FormatFactory::instance().checkIfFormatHasSchemaReader(format))
+            return;
+
+        throw Exception("Table function '" + getName() + "' allows 2 arguments for Distributed format and formats.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
 
     if (args.size() != 3 && args.size() != 4)
@@ -78,7 +83,7 @@ StoragePtr ITableFunctionFileLike::executeImpl(const ASTPtr & /*ast_function*/, 
 
 ColumnsDescription ITableFunctionFileLike::getActualTableStructure(ContextPtr context) const
 {
-    if (structure.empty())
+    if (structure.empty() && getName() == "file" && format == "Distributed")
     {
         assert(getName() == "file" && format == "Distributed");
         size_t total_bytes_to_read = 0;
@@ -88,6 +93,8 @@ ColumnsDescription ITableFunctionFileLike::getActualTableStructure(ContextPtr co
         auto read_stream = StorageDistributedDirectoryMonitor::createSourceFromFile(paths[0]);
         return ColumnsDescription{read_stream->getOutputs().front().getHeader().getNamesAndTypesList()};
     }
+    if (structure.empty())
+        return ColumnsDescription();
     return parseColumnsListFromString(structure, context);
 }
 
