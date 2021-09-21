@@ -11,6 +11,7 @@ PEERDIR(
 
 
 SRCS(
+    CapnProtoUtils.cpp
     FormatFactory.cpp
     FormatSchemaInfo.cpp
     JSONEachRowUtils.cpp

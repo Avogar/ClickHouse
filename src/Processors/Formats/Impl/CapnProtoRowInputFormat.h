@@ -3,9 +3,9 @@
 #include "config_formats.h"
 #if USE_CAPNP
 
-#include <Core/Block.h>
-#include <Processors/Formats/IRowInputFormat.h>
-#include <capnp/schema-parser.h>
+#    include <Core/Block.h>
+#    include <Formats/CapnProtoUtils.h>
+#    include <Processors/Formats/IRowInputFormat.h>
 
 namespace DB
 {
@@ -33,7 +33,7 @@ public:
       * schema_file - location of the capnproto schema, e.g. "schema.capnp"
       * root_object - name to the root object, e.g. "Message"
       */
-    CapnProtoRowInputFormat(ReadBuffer & in_, Block header, Params params_, const FormatSchemaInfo & info);
+    CapnProtoRowInputFormat(ReadBuffer & in_, Block header, Params params_, const FormatSchemaInfo & info, const FormatSettings & format_settings_);
 
     String getName() const override { return "CapnProtoRowInputFormat"; }
 
@@ -55,21 +55,10 @@ private:
         BlockPositionList columns{};
     };
 
-    // Wrapper for classes that could throw in destructor
-    // https://github.com/capnproto/capnproto/issues/553
-    template <typename T>
-    struct DestructorCatcher
-    {
-        T impl;
-        template <typename ... Arg>
-        DestructorCatcher(Arg && ... args) : impl(kj::fwd<Arg>(args)...) {}
-        ~DestructorCatcher() noexcept try { } catch (...) { return; }
-    };
-    using SchemaParser = DestructorCatcher<capnp::SchemaParser>;
-
-    std::shared_ptr<SchemaParser> parser;
+    std::shared_ptr<CapnProtoSchemaParser> parser;
     capnp::StructSchema root;
     std::vector<Action> actions;
+    const FormatSettings format_settings;
 };
 
 }
