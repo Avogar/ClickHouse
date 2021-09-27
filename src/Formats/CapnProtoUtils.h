@@ -1,5 +1,8 @@
 #pragma once
 
+#include "config_formats.h"
+#if USE_CAPNP
+
 #include <Formats/FormatSchemaInfo.h>
 #include <Formats/FormatSettings.h>
 #include <Core/Block.h>
@@ -36,3 +39,5 @@ capnp::DynamicValue::Reader getReaderByColumnName(const capnp::DynamicStruct::Re
 void checkCapnProtoSchemaStructure(const capnp::StructSchema & schema, const Block & header, FormatSettings::EnumComparingMode mode);
 
 }
+
+#endif

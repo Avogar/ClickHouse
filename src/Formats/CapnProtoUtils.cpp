@@ -1,10 +1,13 @@
+#include <Formats/CapnProtoUtils.h>
+
+#if USE_CAPNP
+
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/IDataType.h>
-#include <Formats/CapnProtoUtils.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
 #include <capnp/schema.h>
@@ -385,3 +388,5 @@ void checkCapnProtoSchemaStructure(const capnp::StructSchema & schema, const Blo
 }
 
 }
+
+#endif
