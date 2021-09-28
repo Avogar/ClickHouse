@@ -71,6 +71,7 @@ void registerOutputFormatProcessorNull(FormatFactory & factory);
 void registerOutputFormatProcessorMySQLWire(FormatFactory & factory);
 void registerOutputFormatProcessorMarkdown(FormatFactory & factory);
 void registerOutputFormatProcessorPostgreSQLWire(FormatFactory & factory);
+void registerOutputFormatProcessorsCapnProto(FormatFactory & factory);
 
 /// Input only formats.
 
@@ -147,6 +148,7 @@ void registerFormats()
     registerOutputFormatProcessorMySQLWire(factory);
     registerOutputFormatProcessorMarkdown(factory);
     registerOutputFormatProcessorPostgreSQLWire(factory);
+    registerOutputFormatProcessorsCapnProto(factory);
 
     registerInputFormatProcessorRegexp(factory);
     registerInputFormatProcessorJSONAsString(factory);
