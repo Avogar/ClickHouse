@@ -30,6 +30,8 @@ private:
 
     ColumnsDescription getActualTableStructure(ContextPtr context) const override;
 
-    bool hasStaticStructure() const override { return true; }
+    bool hasStaticStructure() const override { return !structure.empty(); }
+
+    ColumnsDescription getColumnsDescription(ContextPtr context) const;
 };
 }

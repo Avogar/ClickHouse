@@ -1,7 +1,9 @@
 #pragma once
 
 #include <Processors/Formats/IRowInputFormat.h>
+#include <Processors/Formats/ISchemaReader.h>
 #include <Formats/FormatFactory.h>
+#include <DataTypes/DataTypeString.h>
 
 namespace DB
 {
@@ -23,6 +25,19 @@ public:
 
 private:
     void readLineObject(IColumn & column);
+};
+
+class LinaAsStringSchemaReader : public ISchemaReader
+{
+public:
+    LinaAsStringSchemaReader(ReadBuffer & in_) : ISchemaReader(in_)
+    {
+    }
+
+    NamesAndTypesList readSchema() override
+    {
+        return {{"line", std::make_shared<DataTypeString>()}};
+    }
 };
 
 }

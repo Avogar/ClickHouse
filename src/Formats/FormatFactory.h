@@ -4,9 +4,9 @@
 #include <DataStreams/IBlockStream_fwd.h>
 #include <Formats/FormatSettings.h>
 #include <Interpreters/Context_fwd.h>
-#include <Processors/Formats/IInputFormatHeader.h>
 #include <IO/BufferWithOwnMemory.h>
 #include <common/types.h>
+#include <Core/NamesAndTypes.h>
 
 #include <boost/noncopyable.hpp>
 
@@ -33,8 +33,10 @@ class IOutputFormat;
 struct RowInputFormatParams;
 struct RowOutputFormatParams;
 
+class ISchemaReader;
+using SchemaReaderPtr = std::shared_ptr<ISchemaReader>;
+
 using InputFormatPtr = std::shared_ptr<IInputFormat>;
-using InputFormatHeaderPtr = std::shared_ptr<IInputFormatHeader>;
 using OutputFormatPtr = std::shared_ptr<IOutputFormat>;
 
 FormatSettings getFormatSettings(ContextPtr context);
@@ -75,11 +77,6 @@ private:
         ReadCallback callback,
         const FormatSettings & settings)>;
 
-    using InputFormatHeaderCreator = std::function<InputFormatHeaderPtr(
-        ReadBuffer & buf,
-        const RowInputFormatParams & params,
-        const FormatSettings & settings)>;
-
     using OutputCreator = std::function<BlockOutputStreamPtr(
         WriteBuffer & buf,
         const Block & sample,
@@ -94,12 +91,6 @@ private:
 
     using InputProcessorCreator = std::function<InputProcessorCreatorFunc>;
 
-    using InputWithFormatHeaderProcessorCreator = std::function<InputFormatPtr(
-        ReadBuffer & buf,
-        IInputFormatHeader & format_header,
-        const RowInputFormatParams & params,
-        const FormatSettings & settings)>;
-
     using OutputProcessorCreator = std::function<OutputFormatPtr(
             WriteBuffer & buf,
             const Block & sample,
@@ -110,16 +101,17 @@ private:
     /// so in some cases there is no possibility to use parallel parsing.
     /// The checker should return true if parallel parsing should be disabled.
     using NonTrivialPrefixAndSuffixChecker = std::function<bool(ReadBuffer & buf)>;
+    
+    using SchemaReaderCreator = std::function<SchemaReaderPtr(ReadBuffer & buf, const FormatSettings & settings)>;
 
     struct Creators
     {
         InputCreator input_creator;
-        InputFormatHeaderCreator input_format_header_creator;
         OutputCreator output_creator;
         InputProcessorCreator input_processor_creator;
-        InputWithFormatHeaderProcessorCreator input_with_format_header_processor_creator;
         OutputProcessorCreator output_processor_creator;
         FileSegmentationEngine file_segmentation_engine;
+        SchemaReaderCreator schema_reader_creator;
         bool supports_parallel_formatting{false};
         bool is_column_oriented{false};
         NonTrivialPrefixAndSuffixChecker non_trivial_prefix_and_suffix_checker;
@@ -135,14 +127,6 @@ public:
         ReadBuffer & buf,
         const Block & sample,
         ContextPtr context,
-        UInt64 max_block_size,
-        const std::optional<FormatSettings> & format_settings = std::nullopt) const;
-
-    InputFormatPtr getInput(
-        const String & name,
-        ReadBuffer & buf,
-        IInputFormatHeader & format_header,
-        ContextConstPtr context,
         UInt64 max_block_size,
         const std::optional<FormatSettings> & format_settings = std::nullopt) const;
 
@@ -173,21 +157,6 @@ public:
         UInt64 max_block_size,
         const std::optional<FormatSettings> & format_settings = std::nullopt) const;
 
-    InputFormatPtr getInputFormat(
-        const String & name,
-        ReadBuffer & buf,
-        IInputFormatHeader & format_header,
-        ContextConstPtr context,
-        UInt64 max_block_size,
-        const std::optional<FormatSettings> & format_settings = std::nullopt) const;
-
-    InputFormatHeaderPtr getInputFormatHeader(
-        const String & name,
-        ReadBuffer & buf,
-        ContextConstPtr context,
-        UInt64 max_block_size,
-        const std::optional<FormatSettings> & format_settings = std::nullopt) const;
-
     /// Checks all preconditions. Returns ordinary format if parallel formatting cannot be done.
     OutputFormatPtr getOutputFormatParallelIfPossible(
         const String & name,
@@ -205,24 +174,30 @@ public:
         WriteCallback callback = {},
         const std::optional<FormatSettings> & format_settings = std::nullopt) const;
 
-    bool checkIfInputFormatSupportsFormatHeader(const String & name);
+    SchemaReaderPtr getSchemaReader(
+        const String & name,
+        ReadBuffer & buf,
+        ContextPtr context,
+        const std::optional<FormatSettings> & format_settings = std::nullopt) const;
 
     /// Register format by its name.
     void registerInputFormat(const String & name, InputCreator input_creator);
-    void registerInputFormatHeader(const String & name, InputFormatHeaderCreator format_header_creator);
     void registerOutputFormat(const String & name, OutputCreator output_creator);
     void registerFileSegmentationEngine(const String & name, FileSegmentationEngine file_segmentation_engine);
 
     void registerNonTrivialPrefixAndSuffixChecker(const String & name, NonTrivialPrefixAndSuffixChecker non_trivial_prefix_and_suffix_checker);
 
     void registerInputFormatProcessor(const String & name, InputProcessorCreator input_creator);
-    void registerInputFormatWithFormatHeaderProcessor(const String & name, InputWithFormatHeaderProcessorCreator input_creator);
     void registerOutputFormatProcessor(const String & name, OutputProcessorCreator output_creator);
+
+    void registerSchemaReader(const String & name, SchemaReaderCreator schema_reader_creator);
 
     void markOutputFormatSupportsParallelFormatting(const String & name);
     void markFormatAsColumnOriented(const String & name);
 
     bool checkIfFormatIsColumnOriented(const String & name);
+
+    bool checkIfFormatHasSchemaReader(const String & name);
 
     const FormatsDictionary & getAllFormats() const
     {
@@ -237,10 +212,6 @@ private:
 
     const Creators & getCreators(const String & name) const;
 
-    RowInputFormatParams getRowInputFormatParams(
-        UInt64 max_block_size, 
-        const FormatSettings & format_settings, 
-        const Settings & settings) const; 
 };
 
 }

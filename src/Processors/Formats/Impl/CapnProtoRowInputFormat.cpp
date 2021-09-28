@@ -33,6 +33,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+<<<<<<< HEAD
 CapnProtoRowInputFormat::CapnProtoRowInputFormat(ReadBuffer & in_, Block header, Params params_, const FormatSchemaInfo & info, const FormatSettings & format_settings_)
     : IRowInputFormat(std::move(header), in_, std::move(params_))
     , parser(std::make_shared<CapnProtoSchemaParser>())
@@ -277,6 +278,27 @@ bool CapnProtoRowInputFormat::readRow(MutableColumns & columns, RowReadExtension
 
     return true;
 }
+//
+//CapnProtoSchemaReader::CapnProtoSchemaReader(ReadBuffer & in_, const FormatSettings & format_settings_)
+//    : ISchemaReader(in_), format_settings(format_settings_)
+//{
+//}
+//
+//
+//NamesAndTypesList CapnProtoSchemaReader::readSchema()
+//{
+//    auto schema_info = FormatSchemaInfo(
+//        format_settings.schema.format_schema,
+//        "CapnProto",
+//        true,
+//        format_settings.schema.is_server,
+//        format_settings.schema.format_schema_path);
+//
+//    auto schema_parser = CapnProtoSchemaParser();
+//    auto schema = parseSchema(schema_parser, schema_info);
+//    auto root = schema.getNested(schema_info.messageName()).asStruct();
+//
+//}
 
 void registerInputFormatProcessorCapnProto(FormatFactory & factory)
 {

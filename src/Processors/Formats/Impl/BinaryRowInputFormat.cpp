@@ -2,7 +2,7 @@
 #include <IO/ReadHelpers.h>
 #include <Processors/Formats/Impl/BinaryRowInputFormat.h>
 #include <Formats/FormatFactory.h>
-
+#include <DataTypes/DataTypeFactory.h>
 
 namespace DB
 {
@@ -55,6 +55,31 @@ void BinaryRowInputFormat::readPrefix()
     }
 }
 
+BinaryWithNamesAndTypesSchemaReader::BinaryWithNamesAndTypesSchemaReader(ReadBuffer & in_) : INamesAndTypesReader(in_)
+{
+    readVarUInt(columns, in);
+}
+
+Names BinaryWithNamesAndTypesSchemaReader::readColumnNames()
+{
+    std::vector<String> column_names;
+    String column_name;
+    for (size_t i = 0; i < columns; ++i)
+    {
+        readStringBinary(column_name, in);
+        column_names.push_back(column_name);
+    }
+    return column_names;
+}
+
+DataTypes BinaryWithNamesAndTypesSchemaReader::readColumnDataTypes()
+{
+    std::vector<String> type_names = readColumnNames();
+    std::vector<DataTypePtr> data_types;
+    for (const auto & type_name : type_names)
+        data_types.push_back(DataTypeFactory::instance().get(type_name));
+    return data_types;
+}
 
 void registerInputFormatProcessorRowBinary(FormatFactory & factory)
 {
@@ -76,5 +101,14 @@ void registerInputFormatProcessorRowBinary(FormatFactory & factory)
         return std::make_shared<BinaryRowInputFormat>(buf, sample, params, true, true);
     });
 }
+
+void registerRowBinaryWithNamesAndTypesSchemaReader(FormatFactory & factory)
+{
+    factory.registerSchemaReader("RowBinaryWithNamesAndTypes", [](ReadBuffer & in, const FormatSettings &)
+    {
+        return std::make_shared<BinaryWithNamesAndTypesSchemaReader>(in);
+    });
+}
+
 
 }

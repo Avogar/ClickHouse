@@ -9,6 +9,7 @@
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/Serializations/SerializationNullable.h>
+#include <DataTypes/DataTypeFactory.h>
 
 namespace DB
 {
@@ -134,7 +135,7 @@ void TabSeparatedRowInputFormat::readPrefix()
         /// In this format, we assume that column name or type cannot contain BOM,
         ///  so, if format has header,
         ///  then BOM at beginning of stream cannot be confused with name or type of field, and it is safe to skip it.
-        skipBOMIfExists(*in);
+        skipBOMIfExists(in);
     }
 
     /// This is a bit of abstraction leakage, but we have almost the same code in other places.
@@ -143,27 +144,10 @@ void TabSeparatedRowInputFormat::readPrefix()
     {
         if (format_settings.with_names_use_header)
         {
-            String column_name;
-            for (;;)
-            {
-                readEscapedString(column_name, *in);
-                if (!checkChar('\t', *in))
-                {
-                    /// Check last column for \r before adding it, otherwise an error will be:
-                    ///     "Unknown field found in TSV header"
-                    checkForCarriageReturn(*in);
-                    addInputColumn(column_name);
-                    break;
-                }
-                else
-                    addInputColumn(column_name);
-            }
-
-
-            if (!in->eof())
-            {
-                assertChar('\n', *in);
-            }
+            TabSeparatedNamesAndTypesReader names_and_types_reader(in);
+            auto column_names = names_and_types_reader.readColumnNames();
+            for (const auto & column_name : column_names)
+                addInputColumn(column_name);
         }
         else
         {
@@ -432,6 +416,66 @@ void registerInputFormatProcessorTabSeparated(FormatFactory & factory)
             return std::make_shared<TabSeparatedRowInputFormat>(sample, buf, params, true, true, settings);
         });
     }
+}
+
+TabSeparatedNamesAndTypesReader::TabSeparatedNamesAndTypesReader(ReadBuffer & in_) : INamesAndTypesReader(in_)
+{
+    skipBOMIfExists(in);
+}
+
+Names TabSeparatedNamesAndTypesReader::readColumnNames()
+{
+    std::vector<String> column_names;
+    std::string column_name;
+    while (true)
+    {
+        readEscapedString(column_name, in);
+        column_names.push_back(column_name);
+        if (!checkChar('\t', in))
+        {
+            /// Check last column for \r before adding it, otherwise an error will be:
+            ///     "Unknown field found in TSV header"
+            checkForCarriageReturn(in);
+            break;
+        }
+    }
+
+    if (!in.eof())
+    {
+        assertChar('\n', in);
+    }
+
+    return column_names;
+}
+
+DataTypes TabSeparatedNamesAndTypesReader::readColumnDataTypes()
+{
+    std::vector<String> type_names = readColumnNames();
+    std::vector<DataTypePtr> column_types;
+    for (const auto & type_name : type_names)
+        column_types.push_back(DataTypeFactory::instance().get(type_name));
+
+    return column_types;
+}
+
+
+void registerTSVSchemaReader(FormatFactory & factory)
+{
+    factory.registerSchemaReader(
+        "TSVWithNamesAndTypes",
+        [](ReadBuffer & in, const FormatSettings &)
+        {
+            return std::make_shared<TabSeparatedNamesAndTypesReader>(in);
+        }
+        );
+
+    factory.registerSchemaReader(
+        "TabSeparatedWithNamesAndTypes",
+        [](ReadBuffer & in, const FormatSettings &)
+        {
+            return std::make_shared<TabSeparatedNamesAndTypesReader>(in);
+        }
+        );
 }
 
 static std::pair<bool, size_t> fileSegmentationEngineTabSeparatedImpl(ReadBuffer & in, DB::Memory<> & memory, size_t min_chunk_size)

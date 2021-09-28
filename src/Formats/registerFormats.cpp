@@ -84,6 +84,19 @@ void registerInputFormatProcessorCapnProto(FormatFactory & factory);
 void registerNonTrivialPrefixAndSuffixCheckerJSONEachRow(FormatFactory & factory);
 void registerNonTrivialPrefixAndSuffixCheckerJSONAsString(FormatFactory & factory);
 
+void registerArrowSchemaReader(FormatFactory & factory);
+void registerParquetSchemaReader(FormatFactory & factory);
+void registerORCSchemaReader(FormatFactory & factory);
+void registerTSVSchemaReader(FormatFactory & factory);
+void registerJSONCompactEachRowSchemaReader(FormatFactory & factory);
+void registerNativeSchemaReader(FormatFactory & factory);
+void registerRowBinaryWithNamesAndTypesSchemaReader(FormatFactory & factory);
+void registerAvroSchemaReader(FormatFactory & factory);
+void registerProtobufSchemaReader(FormatFactory & factory);
+void registerLineAsStringSchemaReader(FormatFactory & factory);
+void registerRawBLOBSchemaReader(FormatFactory & factory);
+void registerMsgPackSchemaReader(FormatFactory & factory);
+
 void registerFormats()
 {
     auto & factory = FormatFactory::instance();
@@ -160,6 +173,19 @@ void registerFormats()
 
     registerNonTrivialPrefixAndSuffixCheckerJSONEachRow(factory);
     registerNonTrivialPrefixAndSuffixCheckerJSONAsString(factory);
+
+    registerArrowSchemaReader(factory);
+    registerParquetSchemaReader(factory);
+    registerORCSchemaReader(factory);
+    registerTSVSchemaReader(factory);
+    registerJSONCompactEachRowSchemaReader(factory);
+    registerNativeSchemaReader(factory);
+    registerRowBinaryWithNamesAndTypesSchemaReader(factory);
+    registerAvroSchemaReader(factory);
+    registerProtobufSchemaReader(factory);
+    registerLineAsStringSchemaReader(factory);
+    registerRawBLOBSchemaReader(factory);
+    registerMsgPackSchemaReader(factory);
 }
 
 }

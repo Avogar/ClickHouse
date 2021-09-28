@@ -2,6 +2,7 @@
 
 #include <Core/Block.h>
 #include <Processors/Formats/IRowInputFormat.h>
+#include <Processors/Formats/ISchemaReader.h>
 
 
 namespace DB
@@ -25,6 +26,19 @@ public:
 private:
     bool with_names;
     bool with_types;
+};
+
+class BinaryWithNamesAndTypesSchemaReader : public INamesAndTypesReader
+{
+public:
+    BinaryWithNamesAndTypesSchemaReader(ReadBuffer & in_);
+
+    Names readColumnNames() override;
+
+    DataTypes readColumnDataTypes() override;
+
+private:
+    UInt64 columns;
 };
 
 }

@@ -11,6 +11,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeLowCardinality.h>
+#include <DataTypes/DataTypeString.h>
 
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnNullable.h>
@@ -26,6 +27,8 @@ namespace ErrorCodes
 {
     extern const int ILLEGAL_COLUMN;
     extern const int INCORRECT_DATA;
+    extern const int BAD_ARGUMENTS;
+    extern const int UNEXPECTED_END_OF_FILE;
 }
 
 MsgPackRowInputFormat::MsgPackRowInputFormat(const Block & header_, ReadBuffer & in_, Params params_)
@@ -363,6 +366,98 @@ bool MsgPackRowInputFormat::readRow(MutableColumns & columns, RowReadExtension &
     return true;
 }
 
+MsgPackNamesAndTypesReader::MsgPackNamesAndTypesReader(ReadBuffer & in_, const FormatSettings & forma_settings_)
+    : INamesAndTypesReader(in_), number_of_columns(forma_settings_.msgpack.number_of_columns), buf(in_)
+{
+    if (!number_of_columns)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "You must specify setting input_format_msgpack_number_of_columns to extract table schema from MsgPack file.");
+}
+
+Names MsgPackNamesAndTypesReader::readColumnNames()
+{
+    Names column_names;
+    for (size_t i = 0; i != number_of_columns; ++i)
+        column_names.push_back("column_" + std::to_string(i));
+    return column_names;
+}
+
+msgpack::object_handle MsgPackNamesAndTypesReader::readObject()
+{
+    if (buf.eof())
+        throw Exception(ErrorCodes::UNEXPECTED_END_OF_FILE, "Unexpected eof while parsing msgpack object.");
+
+    PeekableReadBufferCheckpoint checkpoint{buf};
+    size_t offset = 0;
+    bool need_more_data = true;
+    msgpack::object_handle object_handle;
+    while (need_more_data)
+    {
+        offset = 0;
+        try
+        {
+            object_handle = msgpack::unpack(buf.position(), buf.buffer().end() - buf.position(), offset);
+            need_more_data = false;
+        }
+        catch (msgpack::insufficient_bytes &)
+        {
+            buf.position() = buf.buffer().end();
+            if (buf.eof())
+                throw Exception("Unexpected end of file while parsing msgpack object.", ErrorCodes::UNEXPECTED_END_OF_FILE);
+            buf.position() = buf.buffer().end();
+            buf.makeContinuousMemoryFromCheckpointToPos();
+            buf.rollbackToCheckpoint();
+        }
+    }
+    buf.position() += offset;
+    return object_handle;
+}
+
+DataTypePtr MsgPackNamesAndTypesReader::getDataType(const msgpack::object & object)
+{
+    switch (object.type)
+    {
+        case msgpack::type::object_type::POSITIVE_INTEGER:
+            return makeNullable(std::make_shared<DataTypeUInt64>());
+        case msgpack::type::object_type::NEGATIVE_INTEGER:
+            return makeNullable(std::make_shared<DataTypeInt64>());
+        case msgpack::type::object_type::FLOAT32:
+            return makeNullable(std::make_shared<DataTypeFloat32>());
+        case msgpack::type::object_type::FLOAT64:
+            return makeNullable(std::make_shared<DataTypeFloat64>());
+        case msgpack::type::object_type::BOOLEAN:
+            return makeNullable(std::make_shared<DataTypeUInt8>());
+        case msgpack::type::object_type::BIN: [[fallthrough]];
+        case msgpack::type::object_type::STR:
+            return makeNullable(std::make_shared<DataTypeString>());
+        case msgpack::type::object_type::ARRAY:
+        {
+            msgpack::object_array object_array = object.via.array;
+            if (object_array.size)
+            {
+                auto nested_type = getDataType(object_array.ptr[0]);
+                if (nested_type)
+                    return std::make_shared<DataTypeArray>(getDataType(object_array.ptr[0]));
+            }
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Null :(");
+        }
+        case msgpack::type::object_type::NIL:
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Null :(");
+        default:
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Msgpack type is not supported.");
+    }
+}
+
+DataTypes MsgPackNamesAndTypesReader::readColumnDataTypes()
+{
+    DataTypes data_types;
+    for (size_t i = 0; i != number_of_columns; ++i)
+    {
+        auto object_handle = readObject();
+        data_types.push_back(getDataType(object_handle.get()));
+    }
+    return data_types;
+}
+
 void registerInputFormatProcessorMsgPack(FormatFactory & factory)
 {
     factory.registerInputFormatProcessor("MsgPack", [](
@@ -372,6 +467,16 @@ void registerInputFormatProcessorMsgPack(FormatFactory & factory)
             const FormatSettings &)
     {
         return std::make_shared<MsgPackRowInputFormat>(sample, buf, params);
+    });
+}
+
+void registerMsgPackSchemaReader(FormatFactory & factory)
+{
+    factory.registerSchemaReader("MsgPack", [](
+            ReadBuffer & buf,
+            const FormatSettings & settings)
+    {
+        return std::make_shared<MsgPackNamesAndTypesReader>(buf, settings);
     });
 }
 

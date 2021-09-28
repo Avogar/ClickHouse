@@ -90,14 +90,19 @@ static size_t countIndicesForType(std::shared_ptr<arrow::DataType> type)
     return 1;
 }
 
+static void getFileReaderAndSchema(ReadBuffer & in, std::unique_ptr<parquet::arrow::FileReader> & file_reader, std::shared_ptr<arrow::Schema> & schema)
+{
+    THROW_ARROW_NOT_OK(parquet::arrow::OpenFile(asArrowFile(in), arrow::default_memory_pool(), &file_reader));
+    THROW_ARROW_NOT_OK(file_reader->GetSchema(&schema));
+}
+
 void ParquetBlockInputFormat::prepareReader()
 {
-    THROW_ARROW_NOT_OK(parquet::arrow::OpenFile(asArrowFile(*in), arrow::default_memory_pool(), &file_reader));
+    std::shared_ptr<arrow::Schema> schema;
+    getFileReaderAndSchema(in, file_reader, schema);
+
     row_group_total = file_reader->num_row_groups();
     row_group_current = 0;
-
-    std::shared_ptr<arrow::Schema> schema;
-    THROW_ARROW_NOT_OK(file_reader->GetSchema(&schema));
 
     arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(getPort().getHeader(), "Parquet", format_settings.parquet.import_nested);
 
@@ -122,7 +127,20 @@ void ParquetBlockInputFormat::prepareReader()
     }
 }
 
-void registerInputFormatProcessorParquet(FormatFactory &factory)
+ParquetSchemaReader::ParquetSchemaReader(ReadBuffer & in_) : ISchemaReader(in_)
+{
+}
+
+NamesAndTypesList ParquetSchemaReader::readSchema()
+{
+    std::unique_ptr<parquet::arrow::FileReader> file_reader;
+    std::shared_ptr<arrow::Schema> schema;
+    getFileReaderAndSchema(in, file_reader, schema);
+    auto header = ArrowColumnToCHColumn::arrowSchemaToCHHeader(*schema, "Parquet");
+    return header.getNamesAndTypesList();
+}
+
+void registerInputFormatProcessorParquet(FormatFactory & factory)
 {
     factory.registerInputFormatProcessor(
             "Parquet",
@@ -134,6 +152,17 @@ void registerInputFormatProcessorParquet(FormatFactory &factory)
                 return std::make_shared<ParquetBlockInputFormat>(buf, sample, settings);
             });
     factory.markFormatAsColumnOriented("Parquet");
+}
+
+void registerParquetSchemaReader(FormatFactory & factory)
+{
+    factory.registerSchemaReader(
+        "Parquet",
+        [](ReadBuffer & buf, const FormatSettings &)
+        {
+            return std::make_shared<ParquetSchemaReader>(buf);
+        }
+        );
 }
 
 }

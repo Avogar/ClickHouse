@@ -18,6 +18,7 @@
 
 #include <DataStreams/IBlockInputStream.h>
 
+#include <Formats/FormatFactory.h>
 
 namespace DB
 {
@@ -53,7 +54,11 @@ void ITableFunctionFileLike::parseArguments(const ASTPtr & ast_function, Context
     {
         if (format == "Distributed")
             return;
-        throw Exception("Table function '" + getName() + "' allows 2 arguments only for Distributed format.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
+
+        if (FormatFactory::instance().checkIfFormatHasSchemaReader(format))
+            return;
+
+        throw Exception("Table function '" + getName() + "' allows 2 arguments for Distributed format and formats that supports schema interface.", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }
 
     if (args.size() != 3 && args.size() != 4)
@@ -72,7 +77,7 @@ void ITableFunctionFileLike::parseArguments(const ASTPtr & ast_function, Context
 
 StoragePtr ITableFunctionFileLike::executeImpl(const ASTPtr & /*ast_function*/, ContextPtr context, const std::string & table_name, ColumnsDescription /*cached_columns*/) const
 {
-    auto columns = getActualTableStructure(context);
+    auto columns = getColumnsDescription(context);
     StoragePtr storage = getStorage(filename, format, columns, context, table_name, compression_method);
     storage->startup();
     return storage;
@@ -80,16 +85,35 @@ StoragePtr ITableFunctionFileLike::executeImpl(const ASTPtr & /*ast_function*/, 
 
 ColumnsDescription ITableFunctionFileLike::getActualTableStructure(ContextPtr context) const
 {
+    auto columns = getColumnsDescription(context);
+    if (columns.empty())
+    {
+        auto storage = getStorage(filename, format, columns, context, "tmp", compression_method);
+        return storage->getInMemoryMetadata().columns;
+    }
+
+    return columns;
+}
+
+ColumnsDescription ITableFunctionFileLike::getColumnsDescription(ContextPtr context) const
+{
     if (structure.empty())
     {
-        assert(getName() == "file" && format == "Distributed");
-        size_t total_bytes_to_read = 0;
-        Strings paths = StorageFile::getPathsList(filename, context->getUserFilesPath(), context, total_bytes_to_read);
-        if (paths.empty())
-            throw Exception("Cannot get table structure from file, because no files match specified name", ErrorCodes::INCORRECT_FILE_NAME);
-        auto source = StorageDistributedDirectoryMonitor::createSourceFromFile(paths[0]);
-        return ColumnsDescription{source->getOutputs().front().getHeader().getNamesAndTypesList()};
+        if (getName() == "file" && format == "Distributed")
+        {
+            assert(getName() == "file" && format == "Distributed");
+            size_t total_bytes_to_read = 0;
+            Strings paths = StorageFile::getPathsList(filename, context->getUserFilesPath(), context, total_bytes_to_read);
+            if (paths.empty())
+                throw Exception(
+                    "Cannot get table structure from file, because no files match specified name", ErrorCodes::INCORRECT_FILE_NAME);
+            auto source = StorageDistributedDirectoryMonitor::createSourceFromFile(paths[0]);
+            return ColumnsDescription{source->getOutputs().front().getHeader().getNamesAndTypesList()};
+        }
+
+        return ColumnsDescription();
     }
+
     return parseColumnsListFromString(structure, context);
 }
 

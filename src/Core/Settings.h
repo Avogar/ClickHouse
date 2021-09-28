@@ -536,7 +536,8 @@ class IColumn;
     M(Bool, database_replicated_ddl_output, true, "Obsolete setting, does nothing.", 0) \
     M(UInt64, replication_alter_columns_timeout, 60, "Obsolete setting, does nothing.", 0) \
     M(Bool, optimize_fuse_sum_count_avg, false, "Obsolete, use optimize_syntax_fuse_functions", 0) \
-    /** The section above is for obsolete settings. Do not add anything there. */
+    /** The section above is for obsolete settings. Do not add anything there. */ \
+    M(Bool, use_shchema_interface, true, "TBA", 0) \
 
 
 // End of COMMON_SETTINGS
@@ -622,6 +623,8 @@ class IColumn;
     M(Bool, output_format_arrow_low_cardinality_as_dictionary, false, "Enable output LowCardinality type as Dictionary Arrow type", 0) \
     \
     M(EnumComparingMode, format_capn_proto_enum_comparising_mode, FormatSettings::EnumComparingMode::BY_VALUES, "How to map ClickHouse Enum and CapnProto Enum", 0)\
+    M(UInt64, input_format_msgpack_number_of_columns, 0, "TBA", 0) \
+
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.
 

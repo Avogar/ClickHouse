@@ -72,4 +72,14 @@ void registerInputFormatProcessorLineAsString(FormatFactory & factory)
         return std::make_shared<LineAsStringRowInputFormat>(sample, buf, params);
     });
 }
+
+void registerLineAsStringSchemaReader(FormatFactory & factory)
+{
+    factory.registerSchemaReader("LineAsString", [](
+            ReadBuffer & buf,
+            const FormatSettings &)
+    {
+        return std::make_shared<LinaAsStringSchemaReader>(buf);
+    });
+}
 }

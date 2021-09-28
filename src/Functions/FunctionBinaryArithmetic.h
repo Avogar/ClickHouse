@@ -51,7 +51,6 @@
 
 #include <cassert>
 
-
 namespace DB
 {
 

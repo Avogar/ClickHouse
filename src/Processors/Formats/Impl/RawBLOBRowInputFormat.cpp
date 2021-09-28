@@ -51,5 +51,15 @@ void registerInputFormatProcessorRawBLOB(FormatFactory & factory)
     });
 }
 
+void registerRawBLOBSchemaReader(FormatFactory & factory)
+{
+    factory.registerSchemaReader("RawBLOB", [](
+            ReadBuffer & buf,
+            const FormatSettings &)
+    {
+        return std::make_shared<RawBLOBSchemaReader>(buf);
+    });
+}
+
 }
 

@@ -21,12 +21,11 @@ StoragePtr TableFunctionFile::getStorage(const String & source,
         WithContext(global_context),
         StorageID(getDatabaseName(), table_name),
         format_,
-        std::nullopt /*format header*/,
         std::nullopt /*format settings*/,
         compression_method_,
         columns,
         ConstraintsDescription{},
-        String{}
+        String{},
     };
 
     return StorageFile::create(source, global_context->getUserFilesPath(), args);

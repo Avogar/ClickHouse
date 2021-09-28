@@ -73,6 +73,35 @@ void registerInputFormatProcessorProtobuf(FormatFactory & factory)
     }
 }
 
+ProtobufSchemaReader::ProtobufSchemaReader(ReadBuffer & in_, const FormatSettings & format_settings)
+    : ISchemaReader(in_)
+    , schema_info(
+          format_settings.schema.format_schema,
+          "Protobuf",
+          true,
+          format_settings.schema.is_server,
+          format_settings.schema.format_schema_path)
+{
+}
+
+NamesAndTypesList ProtobufSchemaReader::readSchema()
+{
+    const auto * message_descriptor = ProtobufSchemas::instance().getMessageTypeForFormatSchema(schema_info);
+    return protobufSchemaToCHSchema(message_descriptor);
+}
+
+void registerProtobufSchemaReader(FormatFactory & factory)
+{
+    factory.registerSchemaReader("Protobuf", [](ReadBuffer & buf, const FormatSettings & settings)
+    {
+        return std::make_shared<ProtobufSchemaReader>(buf, settings);
+    });
+    factory.registerSchemaReader("ProtobufSingle", [](ReadBuffer & buf, const FormatSettings & settings)
+    {
+        return std::make_shared<ProtobufSchemaReader>(buf, settings);
+    });
+}
+
 }
 
 #else
