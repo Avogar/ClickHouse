@@ -1,9 +1,10 @@
 #pragma once
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
-#include <Formats/FormatFactory.h>
 #include <Processors/Formats/IInputFormat.h>
 #include <Processors/Formats/IOutputFormat.h>
+#include <Processors/Formats/ISchemaReader.h>
+#include <Formats/FormatFactory.h>
 
 
 namespace DB
@@ -152,6 +153,17 @@ private:
     }
 };
 
+class NativeSchemaReader : public ISchemaReader
+{
+public:
+    NamesAndTypesList readSchema(ReadBuffer & in) override
+    {
+        auto stream = std::make_shared<NativeBlockInputStream>(in, 0);
+        auto block = stream->read();
+        return block.getNamesAndTypesList();
+    }
+};
+
 void registerInputFormatProcessorNative(FormatFactory & factory)
 {
     factory.registerInputFormatProcessor("Native", [](
@@ -173,6 +185,14 @@ void registerOutputFormatProcessorNative(FormatFactory & factory)
         const FormatSettings &)
     {
         return std::make_shared<NativeOutputFormatFromNativeBlockOutputStream>(sample, buf);
+    });
+}
+
+void registerNativeSchemaReader(FormatFactory & factory)
+{
+    factory.registerSchemaReader("Native", [](const FormatSettings &)
+    {
+        return std::make_shared<NativeSchemaReader>() ;
     });
 }
 

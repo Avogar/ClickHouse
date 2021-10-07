@@ -379,4 +379,11 @@ private:
 };
 
 using EphemeralNodeHolderPtr = EphemeralNodeHolder::Ptr;
+
+String normalizeZooKeeperPath(String zookeeper_path);
+
+String extractZooKeeperName(const String & path);
+
+String extractZooKeeperPath(const String & path);
+
 }

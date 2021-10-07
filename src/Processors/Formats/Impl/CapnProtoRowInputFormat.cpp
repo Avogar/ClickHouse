@@ -268,6 +268,7 @@ bool CapnProtoRowInputFormat::readRow(MutableColumns & columns, RowReadExtension
 #endif
 
     auto root_reader = msg.getRoot<capnp::DynamicStruct>(root);
+
     for (size_t i = 0; i != columns.size(); ++i)
     {
         auto value = getReaderByColumnName(root_reader, column_names[i]);
@@ -275,6 +276,24 @@ bool CapnProtoRowInputFormat::readRow(MutableColumns & columns, RowReadExtension
     }
 
     return true;
+}
+
+CapnProtoSchemaReader::CapnProtoSchemaReader(const FormatSettings & format_settings_) : IExternalSchemaReader(format_settings_)
+{
+}
+
+NamesAndTypesList CapnProtoSchemaReader::readSchema()
+{
+    auto schema_info = FormatSchemaInfo(
+        format_settings.schema.format_schema,
+        "CapnProto",
+        true,
+        format_settings.schema.is_server,
+        format_settings.schema.format_schema_path);
+
+    auto schema_parser = CapnProtoSchemaParser();
+    auto schema = schema_parser.getMessageSchema(schema_info);
+    return capnProtoSchemaToCHSchema(schema);
 }
 
 void registerInputFormatProcessorCapnProto(FormatFactory & factory)
@@ -288,6 +307,14 @@ void registerInputFormatProcessorCapnProto(FormatFactory & factory)
         });
 }
 
+void registerCapnProtoSchemaReader(FormatFactory & factory)
+{
+    factory.registerExternalSchemaReader("CapnProto", [](const FormatSettings & settings)
+    {
+       return std::make_shared<CapnProtoSchemaReader>(settings);
+    });
+}
+
 }
 
 #else
@@ -296,6 +323,7 @@ namespace DB
 {
     class FormatFactory;
     void registerInputFormatProcessorCapnProto(FormatFactory &) {}
+    void registerCapnProtoSchemaReader(FormatFactory & factory) {}
 }
 
 #endif // USE_CAPNP

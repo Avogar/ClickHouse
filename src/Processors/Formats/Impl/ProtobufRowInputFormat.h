@@ -5,7 +5,9 @@
 #endif
 
 #if USE_PROTOBUF
+#    include <Formats/FormatSchemaInfo.h>
 #    include <Processors/Formats/IRowInputFormat.h>
+#    include <Processors/Formats/ISchemaReader.h>
 
 namespace DB
 {
@@ -42,6 +44,17 @@ private:
     std::unique_ptr<ProtobufReader> reader;
     std::vector<size_t> missing_column_indices;
     std::unique_ptr<ProtobufSerializer> serializer;
+};
+
+class ProtobufSchemaReader : public IExternalSchemaReader
+{
+public:
+    ProtobufSchemaReader(const FormatSettings & format_settings_);
+
+    NamesAndTypesList readSchema() override;
+
+private:
+    FormatSchemaInfo schema_info;
 };
 
 }

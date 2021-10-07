@@ -42,6 +42,7 @@ namespace ErrorCodes
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int SAMPLING_NOT_SUPPORTED;
     extern const int ALTER_OF_COLUMN_IS_FORBIDDEN;
+    extern const int CANNOT_EXTRACT_TABLE_STRUCTURE;
 }
 
 StorageMerge::StorageMerge(
@@ -60,7 +61,7 @@ StorageMerge::StorageMerge(
     , database_is_regexp(database_is_regexp_)
 {
     StorageInMemoryMetadata storage_metadata;
-    storage_metadata.setColumns(columns_);
+    storage_metadata.setColumns(columns_.empty() ? getColumnsDescriptionFromSourceTables() : columns_);
     storage_metadata.setComment(comment);
     setInMemoryMetadata(storage_metadata);
 }
@@ -81,9 +82,17 @@ StorageMerge::StorageMerge(
     , database_is_regexp(database_is_regexp_)
 {
     StorageInMemoryMetadata storage_metadata;
-    storage_metadata.setColumns(columns_);
+    storage_metadata.setColumns(columns_.empty() ? getColumnsDescriptionFromSourceTables() : columns_);
     storage_metadata.setComment(comment);
     setInMemoryMetadata(storage_metadata);
+}
+
+ColumnsDescription StorageMerge::getColumnsDescriptionFromSourceTables() const
+{
+    auto table = getFirstTable([](auto && t) { return t; });
+    if (!table)
+        throw Exception{ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE, "There are no tables satisfied provided regexp, you must specify table structure manually"};
+    return table->getInMemoryMetadataPtr()->getColumns();
 }
 
 template <typename F>
@@ -739,7 +748,6 @@ void StorageMerge::convertingSourceStream(
 
 IStorage::ColumnSizeByName StorageMerge::getColumnSizes() const
 {
-
     auto first_materialized_mysql = getFirstTable([](const StoragePtr & table) { return table && table->getName() == "MaterializedMySQL"; });
     if (!first_materialized_mysql)
         return {};
@@ -793,6 +801,9 @@ void registerStorageMerge(StorageFactory & factory)
 
         return StorageMerge::create(
             args.table_id, args.columns, args.comment, source_database_name_or_regexp, is_regexp, table_name_regexp, args.getContext());
+    },
+    {
+        .supports_schema_inference = true
     });
 }
 

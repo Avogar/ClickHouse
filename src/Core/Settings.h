@@ -625,6 +625,9 @@ class IColumn;
     M(Bool, output_format_arrow_low_cardinality_as_dictionary, false, "Enable output LowCardinality type as Dictionary Arrow type", 0) \
     \
     M(EnumComparingMode, format_capn_proto_enum_comparising_mode, FormatSettings::EnumComparingMode::BY_VALUES, "How to map ClickHouse Enum and CapnProto Enum", 0)\
+    M(UInt64, input_format_msgpack_number_of_columns, 0, "TBA", 0) \
+    M(UInt64, input_format_msgpack_max_depth_for_structure_determination, 10, "TBA", 0) \
+
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.
 

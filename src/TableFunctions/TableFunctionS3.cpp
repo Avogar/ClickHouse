@@ -69,6 +69,7 @@ void TableFunctionS3::parseArguments(const ASTPtr & ast_function, ContextPtr con
         /// Size -> argument indexes
         static auto size_to_args = std::map<size_t, std::map<String, size_t>>
         {
+            {2, {{"format", 1}}},
             {3, {{"format", 1}, {"structure", 2}}},
             {4, {{"format", 1}, {"structure", 2}, {"compression_method", 3}}},
             {5, {{"access_key_id", 1}, {"secret_access_key", 2}, {"format", 3}, {"structure", 4}}},

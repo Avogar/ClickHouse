@@ -145,6 +145,7 @@ public:
     static StorageS3Configuration getConfiguration(ASTs & engine_args, ContextPtr local_context);
 
 private:
+    std::shared_ptr<StorageS3Source::IteratorWrapper> createFileIterator(ContextPtr local_context);
 
     friend class StorageS3Cluster;
     friend class TableFunctionS3Cluster;

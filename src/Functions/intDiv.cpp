@@ -2,7 +2,7 @@
 #include <Functions/FunctionBinaryArithmetic.h>
 
 #include "divide/divide.h"
-
+#include <re2/re2.h>
 
 namespace DB
 {
@@ -65,6 +65,7 @@ struct DivideIntegralByConstantImpl
                 c_pos[i] = -make_unsigned_t<A>(a_pos[i]);   /// Avoid UBSan report in signed integer overflow.
             return;
         }
+
 
         /// Division with too large divisor.
         if (unlikely(b > std::numeric_limits<A>::max()

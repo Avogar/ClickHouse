@@ -9,6 +9,7 @@
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/Serializations/SerializationNullable.h>
+#include <DataTypes/DataTypeFactory.h>
 
 namespace DB
 {
@@ -143,27 +144,10 @@ void TabSeparatedRowInputFormat::readPrefix()
     {
         if (format_settings.with_names_use_header)
         {
-            String column_name;
-            for (;;)
-            {
-                readEscapedString(column_name, *in);
-                if (!checkChar('\t', *in))
-                {
-                    /// Check last column for \r before adding it, otherwise an error will be:
-                    ///     "Unknown field found in TSV header"
-                    checkForCarriageReturn(*in);
-                    addInputColumn(column_name);
-                    break;
-                }
-                else
-                    addInputColumn(column_name);
-            }
-
-
-            if (!in->eof())
-            {
-                assertChar('\n', *in);
-            }
+            TabSeparatedNamesAndTypesReader names_and_types_reader;
+            auto column_names = names_and_types_reader.readColumnNames(*in);
+            for (const auto & column_name : column_names)
+                addInputColumn(column_name);
         }
         else
         {
@@ -432,6 +416,62 @@ void registerInputFormatProcessorTabSeparated(FormatFactory & factory)
             return std::make_shared<TabSeparatedRowInputFormat>(sample, buf, params, true, true, settings);
         });
     }
+}
+
+Names TabSeparatedNamesAndTypesReader::readColumnNames(ReadBuffer & in)
+{
+    skipBOMIfExists(in);
+    std::vector<String> column_names;
+    std::string column_name;
+    while (true)
+    {
+        readEscapedString(column_name, in);
+        column_names.push_back(column_name);
+        if (!checkChar('\t', in))
+        {
+            /// Check last column for \r before adding it, otherwise an error will be:
+            ///     "Unknown field found in TSV header"
+            checkForCarriageReturn(in);
+            break;
+        }
+    }
+
+    if (!in.eof())
+    {
+        assertChar('\n', in);
+    }
+
+    return column_names;
+}
+
+DataTypes TabSeparatedNamesAndTypesReader::readColumnDataTypes(ReadBuffer & in)
+{
+    std::vector<String> type_names = readColumnNames(in);
+    std::vector<DataTypePtr> column_types;
+    for (const auto & type_name : type_names)
+        column_types.push_back(DataTypeFactory::instance().get(type_name));
+
+    return column_types;
+}
+
+
+void registerTSVSchemaReader(FormatFactory & factory)
+{
+    factory.registerSchemaReader(
+        "TSVWithNamesAndTypes",
+        [](const FormatSettings &)
+        {
+            return std::make_shared<TabSeparatedNamesAndTypesReader>();
+        }
+        );
+
+    factory.registerSchemaReader(
+        "TabSeparatedWithNamesAndTypes",
+        [](const FormatSettings &)
+        {
+            return std::make_shared<TabSeparatedNamesAndTypesReader>();
+        }
+        );
 }
 
 static std::pair<bool, size_t> fileSegmentationEngineTabSeparatedImpl(ReadBuffer & in, DB::Memory<> & memory, size_t min_chunk_size)

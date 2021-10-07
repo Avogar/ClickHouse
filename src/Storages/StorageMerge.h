@@ -129,6 +129,8 @@ protected:
         const Block & header, const StorageMetadataPtr & metadata_snapshot, const Aliases & aliases,
         ContextPtr context, ASTPtr & query,
         Pipe & pipe, QueryProcessingStage::Enum processed_stage);
+
+    ColumnsDescription getColumnsDescriptionFromSourceTables() const;
 };
 
 }

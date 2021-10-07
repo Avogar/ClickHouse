@@ -197,6 +197,12 @@ struct FormatSettings
     {
         EnumComparingMode enum_comparing_mode = EnumComparingMode::BY_VALUES;
     } capn_proto;
+
+    struct
+    {
+        UInt64 number_of_columns = 0;
+        UInt64 max_depth_for_structure_determination = 0;
+    } msgpack;
 };
 
 }

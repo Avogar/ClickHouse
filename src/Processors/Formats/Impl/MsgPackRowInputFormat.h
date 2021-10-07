@@ -9,6 +9,7 @@
 #if USE_MSGPACK
 
 #include <Processors/Formats/IRowInputFormat.h>
+#include <Processors/Formats/ISchemaReader.h>
 #include <Formats/FormatFactory.h>
 #include <IO/PeekableReadBuffer.h>
 #include <msgpack.hpp>
@@ -73,6 +74,22 @@ private:
     MsgPackVisitor visitor;
     msgpack::detail::parse_helper<MsgPackVisitor> parser;
     const DataTypes data_types;
+};
+
+class MsgPackNamesAndTypesReader : public INamesAndTypesReader
+{
+public:
+    MsgPackNamesAndTypesReader(const FormatSettings & format_settings_);
+
+    Names readColumnNames(ReadBuffer & in) override;
+    DataTypes readColumnDataTypes(ReadBuffer & in) override;
+
+private:
+    msgpack::object_handle readObject(PeekableReadBuffer & buf);
+    DataTypePtr getDataType(const msgpack::object & object);
+
+    UInt64 number_of_columns;
+    UInt64 max_depth_for_structure_determination;
 };
 
 }

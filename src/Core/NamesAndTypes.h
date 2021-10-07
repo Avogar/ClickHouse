@@ -105,6 +105,8 @@ public:
 
     /// Try to get column by name, return empty optional if column not found
     std::optional<NameAndTypePair> tryGetByName(const std::string & name) const;
+
+    static NamesAndTypesList createFromNamesAndTypes(const Names & names, const DataTypes & types);
 };
 
 }

@@ -3,6 +3,7 @@
 #include <Core/Block.h>
 #include <Formats/FormatSettings.h>
 #include <Processors/Formats/RowInputFormatWithDiagnosticInfo.h>
+#include <Processors/Formats/ISchemaReader.h>
 
 
 namespace DB
@@ -51,6 +52,16 @@ private:
     bool parseRowAndPrintDiagnosticInfo(MutableColumns & columns, WriteBuffer & out) override;
     void tryDeserializeField(const DataTypePtr & type, IColumn & column, size_t file_column) override;
     bool isGarbageAfterField(size_t, ReadBuffer::Position pos) override { return *pos != '\n' && *pos != '\t'; }
+};
+
+class TabSeparatedNamesAndTypesReader : public INamesAndTypesReader
+{
+public:
+    friend TabSeparatedRowInputFormat;
+
+protected:
+    Names readColumnNames(ReadBuffer & in) override;
+    DataTypes readColumnDataTypes(ReadBuffer & in) override;
 };
 
 }
