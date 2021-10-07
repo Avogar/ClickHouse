@@ -1,8 +1,6 @@
 #include "LocalServer.h"
 
 #include <Poco/Util/XMLConfiguration.h>
-#include <Poco/Util/HelpFormatter.h>
-#include <Poco/Util/OptionCallback.h>
 #include <Poco/String.h>
 #include <Poco/Logger.h>
 #include <Poco/NullChannel.h>
@@ -10,7 +8,6 @@
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/System/attachInformationSchemaTables.h>
 #include <Interpreters/ProcessList.h>
-#include <Interpreters/executeQuery.h>
 #include <Interpreters/loadMetadata.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <base/getFQDNOrHostName.h>
@@ -21,19 +18,14 @@
 #include <Common/Macros.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/escapeForFileName.h>
-#include <Common/ClickHouseRevision.h>
 #include <Common/ThreadStatus.h>
-#include <Common/UnicodeBar.h>
-#include <Common/config_version.h>
 #include <Common/quoteString.h>
 #include <loggers/Loggers.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
-#include <IO/ReadHelpers.h>
 #include <IO/UseSSL.h>
 #include <Parsers/parseQuery.h>
-#include <Parsers/IAST.h>
 #include <base/ErrorHandlers.h>
 #include <Functions/registerFunctions.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
@@ -42,10 +34,10 @@
 #include <Dictionaries/registerDictionaries.h>
 #include <Disks/registerDisks.h>
 #include <Formats/registerFormats.h>
+#include <Formats/FormatFactory.h>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options.hpp>
 #include <base/argsToConfig.h>
-#include <Common/TerminalSize.h>
 #include <Common/randomSeed.h>
 #include <filesystem>
 
@@ -60,29 +52,28 @@ namespace ErrorCodes
     extern const int BAD_ARGUMENTS;
     extern const int CANNOT_LOAD_CONFIG;
     extern const int FILE_ALREADY_EXISTS;
+    extern const int CANNOT_EXTRACT_TABLE_STRUCTURE;
 }
 
 
-void LocalServer::processError(const String &) const
+void LocalServer::processError(const String & query) const
 {
     if (ignore_error)
         return;
 
     if (is_interactive)
     {
-        String message;
         if (server_exception)
         {
             bool print_stack_trace = config().getBool("stacktrace", false);
-            message = getExceptionMessage(*server_exception, print_stack_trace, true);
+            fmt::print(stderr, "Error on processing query '{}':\n{}\n", query, getExceptionMessage(*server_exception, print_stack_trace, true));
+            fmt::print(stderr, "\n");
         }
-        else if (client_exception)
+        if (client_exception)
         {
-            message = client_exception->message();
+            fmt::print(stderr, "Error on processing query '{}':\n{}\n", query, client_exception->message());
+            fmt::print(stderr, "\n");
         }
-
-        fmt::print(stderr, "Received exception:\n{}\n", message);
-        fmt::print(stderr, "\n");
     }
     else
     {
@@ -329,6 +320,9 @@ std::string LocalServer::getInitialCreateTableQuery()
     auto table_structure = config().getString("table-structure");
     auto data_format = backQuoteIfNeed(config().getString("table-data-format", "TSV"));
 
+    if (table_structure == "auto" && !FormatFactory::instance().checkIfFormatHasAnySchemaReader(data_format))
+        throw Exception{ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE, "File format {} doesn't support schema inference. You must specify the structure manually"};
+
     String table_file;
     if (!config().has("table-file") || config().getString("table-file") == "-")
     {
@@ -341,8 +335,9 @@ std::string LocalServer::getInitialCreateTableQuery()
         table_file = quoteString(config().getString("table-file"));
     }
 
-    return fmt::format("CREATE TABLE {} ({}) ENGINE = File({}, {});",
-                       table_name, table_structure, data_format, table_file);
+    return fmt::format(
+        "CREATE TABLE {} {} ENGINE = File({}, {});",
+        table_name, table_structure == "auto" ? "" : "(" + table_structure + ")", data_format, table_file);
 }
 
 
@@ -622,7 +617,8 @@ static std::string getHelpHeader()
         "There are two ways to define initial table keeping your data."
         " Either just in first query like this:\n"
         "    CREATE TABLE <table> (<structure>) ENGINE = File(<input-format>, <file>);\n"
-        "Either through corresponding command line parameters --table --structure --input-format and --file.";
+        "Either through corresponding command line parameters --table --structure --input-format and --file.\n"
+        "You can skip `structure` parameter and clickhouse-local will try to determine the structure directly from the data.";
 }
 
 
