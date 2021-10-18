@@ -3,6 +3,7 @@
 #if USE_ORC
 
 #include <Processors/Formats/IInputFormat.h>
+#include <Processors/Formats/ISchemaReader.h>
 #include <Formats/FormatSettings.h>
 
 #include <arrow/adapters/orc/adapter.h>
@@ -51,6 +52,12 @@ private:
     const FormatSettings format_settings;
 
     void prepareReader();
+};
+
+class ORCSchemaReader : public ISchemaReader
+{
+public:
+    NamesAndTypesList readSchema(ReadBuffer & in) override;
 };
 
 }

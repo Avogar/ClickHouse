@@ -2,6 +2,7 @@
 
 #include <Core/Block.h>
 #include <Processors/Formats/IRowInputFormat.h>
+#include <Processors/Formats/ISchemaReader.h>
 #include <Formats/FormatSettings.h>
 #include <Common/HashTable/HashMap.h>
 
@@ -82,6 +83,18 @@ private:
     bool allow_new_rows = true;
 
     bool yield_strings;
+};
+
+class JSONEachRowSchemaReader : public ISchemaReader
+{
+public:
+    JSONEachRowSchemaReader(bool json_strings, const FormatSettings & format_settings);
+
+    NamesAndTypesList readSchema(ReadBuffer & in) override;
+
+private:
+    bool json_strings;
+    size_t max_depth_for_schema_inference;
 };
 
 }

@@ -2,7 +2,6 @@
 
 #include <Processors/ISource.h>
 #include <IO/ReadBuffer.h>
-#include <memory>
 
 
 namespace DB
@@ -25,13 +24,6 @@ struct ColumnMapping
 };
 
 using ColumnMappingPtr = std::shared_ptr<ColumnMapping>;
-
-namespace ErrorCodes
-{
-    extern const int NOT_IMPLEMENTED;
-}
-
-class ReadBuffer;
 
 /** Input format is a source, that reads data from ReadBuffer.
   */

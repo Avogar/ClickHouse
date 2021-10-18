@@ -30,6 +30,7 @@
 #include <IO/WriteHelpers.h>
 
 #include <Formats/FormatFactory.h>
+#include <Formats/ReadSchemaUtils.h>
 
 #include <Processors/Transforms/AddingDefaultsTransform.h>
 #include <Processors/Formats/IOutputFormat.h>
@@ -74,6 +75,7 @@ namespace ErrorCodes
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int S3_ERROR;
     extern const int UNEXPECTED_EXPRESSION;
+    extern const int CANNOT_EXTRACT_TABLE_STRUCTURE;
 }
 
 class IOutputFormat;
@@ -474,13 +476,55 @@ StorageS3::StorageS3(
 {
     context_->getGlobalContext()->getRemoteHostFilter().checkURL(uri_.uri);
     StorageInMemoryMetadata storage_metadata;
-    storage_metadata.setColumns(columns_);
+
+    if (columns_.empty())
+    {
+        auto read_buffer_creator = [this, context_]()
+        {
+            auto file_iterator = createFileIterator(context_);
+            String current_key = (*file_iterator)();
+            if (current_key.empty())
+                throw Exception(
+                    ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE,
+                    "Cannot extract table structure from {} format file, because there are no files with provided path in S3. You must specify "
+                    "table structure manually",
+                    format_name);
+
+            return wrapReadBufferWithCompressionMethod(
+                std::make_unique<ReadBufferFromS3>(client_auth.client, client_auth.uri.bucket, current_key, max_single_read_retries, DBMS_DEFAULT_BUFFER_SIZE),
+                chooseCompressionMethod(current_key, compression_method));
+        };
+
+        ColumnsDescription columns = readSchemaFromFormat(format_name, format_settings, read_buffer_creator, context_);
+        storage_metadata.setColumns(columns);
+    }
+    else
+        storage_metadata.setColumns(columns_);
+
     storage_metadata.setConstraints(constraints_);
     storage_metadata.setComment(comment);
     setInMemoryMetadata(storage_metadata);
     updateClientAndAuthSettings(context_, client_auth);
 }
 
+std::shared_ptr<StorageS3Source::IteratorWrapper> StorageS3::createFileIterator(ContextPtr local_context)
+{
+    std::shared_ptr<StorageS3Source::IteratorWrapper> iterator_wrapper{nullptr};
+    if (distributed_processing)
+    {
+        return std::make_shared<StorageS3Source::IteratorWrapper>(
+            [callback = local_context->getReadTaskCallback()]() -> String {
+                return callback();
+        });
+    }
+
+    /// Iterate through disclosed globs and make a source for each file
+    auto glob_iterator = std::make_shared<StorageS3Source::DisclosedGlobIterator>(*client_auth.client, client_auth.uri);
+    return std::make_shared<StorageS3Source::IteratorWrapper>([glob_iterator]()
+    {
+        return glob_iterator->next();
+    });
+}
 
 Pipe StorageS3::read(
     const Names & column_names,
@@ -504,23 +548,7 @@ Pipe StorageS3::read(
             need_file_column = true;
     }
 
-    std::shared_ptr<StorageS3Source::IteratorWrapper> iterator_wrapper{nullptr};
-    if (distributed_processing)
-    {
-        iterator_wrapper = std::make_shared<StorageS3Source::IteratorWrapper>(
-            [callback = local_context->getReadTaskCallback()]() -> String {
-                return callback();
-        });
-    }
-    else
-    {
-        /// Iterate through disclosed globs and make a source for each file
-        auto glob_iterator = std::make_shared<StorageS3Source::DisclosedGlobIterator>(*client_auth.client, client_auth.uri);
-        iterator_wrapper = std::make_shared<StorageS3Source::IteratorWrapper>([glob_iterator]()
-        {
-            return glob_iterator->next();
-        });
-    }
+    std::shared_ptr<StorageS3Source::IteratorWrapper> iterator_wrapper = createFileIterator(local_context);
 
     for (size_t i = 0; i < num_streams; ++i)
     {

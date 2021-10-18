@@ -91,14 +91,19 @@ static size_t countIndicesForType(std::shared_ptr<arrow::DataType> type)
     return 1;
 }
 
-void ParquetBlockInputFormat::prepareReader()
+static void getFileReaderAndSchema(ReadBuffer & in, std::unique_ptr<parquet::arrow::FileReader> & file_reader, std::shared_ptr<arrow::Schema> & schema)
 {
     THROW_ARROW_NOT_OK(parquet::arrow::OpenFile(asArrowFile(*in, format_settings), arrow::default_memory_pool(), &file_reader));
+    THROW_ARROW_NOT_OK(file_reader->GetSchema(&schema));
+}
+
+void ParquetBlockInputFormat::prepareReader()
+{
+    std::shared_ptr<arrow::Schema> schema;
+    getFileReaderAndSchema(*in, file_reader, schema);
+
     row_group_total = file_reader->num_row_groups();
     row_group_current = 0;
-
-    std::shared_ptr<arrow::Schema> schema;
-    THROW_ARROW_NOT_OK(file_reader->GetSchema(&schema));
 
     arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(getPort().getHeader(), "Parquet", format_settings.parquet.import_nested);
 
@@ -123,7 +128,16 @@ void ParquetBlockInputFormat::prepareReader()
     }
 }
 
-void registerInputFormatParquet(FormatFactory &factory)
+NamesAndTypesList ParquetSchemaReader::readSchema(ReadBuffer & in)
+{
+    std::unique_ptr<parquet::arrow::FileReader> file_reader;
+    std::shared_ptr<arrow::Schema> schema;
+    getFileReaderAndSchema(in, file_reader, schema);
+    auto header = ArrowColumnToCHColumn::arrowSchemaToCHHeader(*schema, "Parquet");
+    return header.getNamesAndTypesList();
+}
+
+void registerInputFormatParquet(FormatFactory & factory)
 {
     factory.registerInputFormat(
             "Parquet",
@@ -135,6 +149,17 @@ void registerInputFormatParquet(FormatFactory &factory)
                 return std::make_shared<ParquetBlockInputFormat>(buf, sample, settings);
             });
     factory.markFormatAsColumnOriented("Parquet");
+}
+
+void registerParquetSchemaReader(FormatFactory & factory)
+{
+    factory.registerSchemaReader(
+        "Parquet",
+        [](const FormatSettings &)
+        {
+            return std::make_shared<ParquetSchemaReader>();
+        }
+        );
 }
 
 }

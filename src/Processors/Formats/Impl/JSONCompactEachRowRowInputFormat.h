@@ -2,6 +2,7 @@
 
 #include <Core/Block.h>
 #include <Processors/Formats/RowInputFormatWithNamesAndTypes.h>
+#include <Processors/Formats/ISchemaReader.h>
 #include <Formats/FormatSettings.h>
 #include <Common/HashTable/HashMap.h>
 
@@ -10,13 +11,6 @@ namespace DB
 
 class ReadBuffer;
 
-class JSONCompactEachRowRowInputFormatHeader : public IInputFormatHeader
-{
-public:
-    JSONCompactEachRowRowInputFormatHeader(ReadBuffer & in);
-
-    void readPrefix() override;
-};
 
 /** A stream for reading data in a bunch of formats:
  *  - JSONCompactEachRow
@@ -36,14 +30,6 @@ public:
         bool with_types_,
         bool yield_strings_,
         const FormatSettings & format_settings_);
-
-    JSONCompactEachRowRowInputFormat(
-        ReadBuffer & in_,
-        IInputFormatHeader & format_header_,
-        Params params_,
-        const FormatSettings & format_settings_,
-        bool with_names_,
-        bool yield_strings_);
 
     String getName() const override { return "JSONCompactEachRowRowInputFormat"; }
 
@@ -69,12 +55,24 @@ private:
     void skipFieldDelimiter() override;
     void skipRowEndDelimiter() override;
 
-    std::vector<String> readHeaderRow();
-    std::vector<String> readNames() override { return readHeaderRow(); }
-    std::vector<String> readTypes() override { return readHeaderRow(); }
-    String readFieldIntoString();
-
     bool yield_strings;
+};
+
+class JSONCompactEachRowRowSchemaReader : public FormatWithNamesAndTypesSchemaReader
+{
+public:
+    JSONCompactEachRowRowSchemaReader(bool with_names_, bool with_types_, bool yield_strings_, const FormatSettings & format_settings_);
+
+    Names readColumnNames(ReadBuffer & in) override;
+    Names readDataTypeNames(ReadBuffer & in) override;
+
+private:
+    DataTypes determineTypesFromData(ReadBuffer & in) override;
+
+    std::vector<std::string> readRow(ReadBuffer & in);
+
+    bool json_strings;
+    size_t max_depth_for_schema_inference;
 };
 
 }

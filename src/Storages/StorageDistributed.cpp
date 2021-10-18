@@ -13,6 +13,7 @@
 #include <Storages/Distributed/DistributedSink.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/AlterCommands.h>
+#include <Storages/getStructureOfRemoteTable.h>
 
 #include <Columns/ColumnConst.h>
 
@@ -24,7 +25,6 @@
 #include <Common/randomSeed.h>
 #include <Common/formatReadable.h>
 
-#include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -33,16 +33,12 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <Parsers/ParserAlterQuery.h>
-#include <Parsers/TablePropertiesQueriesASTs.h>
-#include <Parsers/parseQuery.h>
 #include <Parsers/queryToString.h>
 
 #include <Interpreters/ClusterProxy/SelectStreamFactory.h>
 #include <Interpreters/ClusterProxy/executeQuery.h>
 #include <Interpreters/Cluster.h>
 #include <Interpreters/ExpressionAnalyzer.h>
-#include <Interpreters/InterpreterAlterQuery.h>
 #include <Interpreters/InterpreterDescribeQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/JoinedTables.h>
@@ -63,15 +59,12 @@
 #include <Processors/Sources/RemoteSource.h>
 #include <Processors/Sinks/EmptySink.h>
 
-#include <Core/Field.h>
 #include <Core/Settings.h>
 
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromString.h>
 #include <IO/Operators.h>
 #include <IO/ConnectionTimeoutsContext.h>
-
-#include <Poco/DirectoryIterator.h>
 
 #include <memory>
 #include <filesystem>
@@ -328,7 +321,16 @@ StorageDistributed::StorageDistributed(
     , rng(randomSeed())
 {
     StorageInMemoryMetadata storage_metadata;
-    storage_metadata.setColumns(columns_);
+    if (columns_.empty())
+    {
+        StorageID storage_id = StorageID::createEmpty();
+        storage_id.table_name = remote_table;
+        storage_id.database_name = remote_database;
+        storage_metadata.setColumns(getStructureOfRemoteTable(*getCluster(), storage_id, getContext(), remote_table_function_ptr));
+    }
+    else
+        storage_metadata.setColumns(columns_);
+
     storage_metadata.setConstraints(constraints_);
     storage_metadata.setComment(comment);
     setInMemoryMetadata(storage_metadata);
@@ -1385,6 +1387,7 @@ void registerStorageDistributed(StorageFactory & factory)
     {
         .supports_settings = true,
         .supports_parallel_insert = true,
+        .supports_schema_inference = true,
         .source_access_type = AccessType::REMOTE,
     });
 }

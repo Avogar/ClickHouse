@@ -8,7 +8,7 @@ class ColumnsDescription;
 class Context;
 
 /*
- * function(source, format, structure) - creates a temporary storage from formatted source
+ * function(source, format, structure[, compression_method]) - creates a temporary storage from formatted source
  */
 class ITableFunctionFileLike : public ITableFunction
 {
@@ -18,7 +18,7 @@ protected:
 
     String filename;
     String format;
-    String structure;
+    String structure = "auto";
     String compression_method = "auto";
 
 private:
@@ -30,6 +30,9 @@ private:
 
     ColumnsDescription getActualTableStructure(ContextPtr context) const override;
 
-    bool hasStaticStructure() const override { return true; }
+    bool hasStaticStructure() const override { return structure != "auto" || (getName() == "file" && format == "Distributed"); }
+
+    ColumnsDescription parseStructure(ContextPtr context) const;
 };
+
 }

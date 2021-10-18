@@ -14,18 +14,18 @@ StoragePtr TableFunctionFile::getStorage(const String & source,
     ContextPtr global_context, const std::string & table_name,
     const std::string & compression_method_) const
 {
+    LOG_DEBUG(&Poco::Logger::get("TableFunctionFile"), "getStorage");
     // For `file` table function, we are going to use format settings from the
     // query context.
     StorageFile::CommonArguments args{
         WithContext(global_context),
         StorageID(getDatabaseName(), table_name),
         format_,
-        std::nullopt /*format header*/,
         std::nullopt /*format settings*/,
         compression_method_,
         columns,
         ConstraintsDescription{},
-        String{}
+        String{},
     };
 
     return StorageFile::create(source, global_context->getUserFilesPath(), args);

@@ -5,6 +5,7 @@
 
 #include <Core/Block.h>
 #include <Processors/Formats/RowInputFormatWithNamesAndTypes.h>
+#include <Processors/Formats/ISchemaReader.h>
 #include <Formats/FormatSettings.h>
 
 
@@ -47,12 +48,21 @@ private:
     void skipTypes() override { skipHeaderRow(); }
     void skipFieldDelimiter() override;
     void skipRowEndDelimiter() override;
+};
 
-    std::vector<String> readHeaderRow();
-    std::vector<String> readNames() override { return readHeaderRow(); }
-    std::vector<String> readTypes() override { return readHeaderRow(); }
+class CSVSchemaReader : public FormatWithNamesAndTypesSchemaReader
+{
+public:
+    CSVSchemaReader(bool with_names_, bool with_types_, const FormatSettings & format_setting_);
 
-    String readFieldIntoString();
+    Names readColumnNames(ReadBuffer & in) override;
+    Names readDataTypeNames(ReadBuffer & in) override;
+
+private:
+    DataTypes determineTypesFromData(ReadBuffer & in) override;
+    std::vector<std::string> readRow(ReadBuffer & in);
+
+    const FormatSettings::CSV csv_settings;
 };
 
 }

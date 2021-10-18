@@ -13,8 +13,9 @@
 #include <IO/ConnectionTimeoutsContext.h>
 
 #include <Formats/FormatFactory.h>
-#include <Processors/Formats/IOutputFormat.h>
+#include <Formats/ReadSchemaUtils.h>
 #include <Processors/Formats/IInputFormat.h>
+#include <Processors/Formats/IOutputFormat.h>
 
 #include <Common/parseRemoteDescription.h>
 #include <Processors/Transforms/AddingDefaultsTransform.h>
@@ -40,7 +41,7 @@ namespace ErrorCodes
 
 IStorageURLBase::IStorageURLBase(
     const String & uri_,
-    ContextPtr /*context_*/,
+    ContextPtr context_,
     const StorageID & table_id_,
     const String & format_name_,
     const std::optional<FormatSettings> & format_settings_,
@@ -61,7 +62,29 @@ IStorageURLBase::IStorageURLBase(
     , partition_by(partition_by_)
 {
     StorageInMemoryMetadata storage_metadata;
-    storage_metadata.setColumns(columns_);
+    if (columns_.empty())
+    {
+        auto read_buffer_creator = [context_, this]()
+        {
+            return wrapReadBufferWithCompressionMethod(
+                std::make_unique<ReadWriteBufferFromHTTP>(
+                    uri,
+                    getReadMethod(),
+                    nullptr,
+                    ConnectionTimeouts::getHTTPTimeouts(context_),
+                    context_->getSettingsRef().max_http_get_redirects,
+                    Poco::Net::HTTPBasicCredentials{},
+                    DBMS_DEFAULT_BUFFER_SIZE,
+                    headers,
+                    context_->getRemoteHostFilter()),
+                chooseCompressionMethod(uri.getPath(), compression_method));
+        };
+
+        ColumnsDescription columns = readSchemaFromFormat(format_name, format_settings, read_buffer_creator, context_);
+        storage_metadata.setColumns(columns);
+    }
+    else
+        storage_metadata.setColumns(columns_);
     storage_metadata.setConstraints(constraints_);
     storage_metadata.setComment(comment);
     setInMemoryMetadata(storage_metadata);
@@ -598,6 +621,7 @@ void registerStorageURL(StorageFactory & factory)
     },
     {
         .supports_settings = true,
+        .supports_schema_inference = true,
         .source_access_type = AccessType::URL,
     });
 }

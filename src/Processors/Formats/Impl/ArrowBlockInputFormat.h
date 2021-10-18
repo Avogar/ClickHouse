@@ -4,6 +4,7 @@
 #if USE_ARROW
 
 #include <Processors/Formats/IInputFormat.h>
+#include <Processors/Formats/ISchemaReader.h>
 #include <Formats/FormatSettings.h>
 
 namespace arrow { class RecordBatchReader; }
@@ -42,6 +43,17 @@ private:
     const FormatSettings format_settings;
 
     void prepareReader();
+};
+
+class ArrowSchemaReader : public ISchemaReader
+{
+public:
+    explicit ArrowSchemaReader(bool stream);
+
+    NamesAndTypesList readSchema(ReadBuffer & in) override;
+
+private:
+    bool stream;
 };
 
 }

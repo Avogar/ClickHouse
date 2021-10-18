@@ -3,6 +3,7 @@
 #include <Core/Block.h>
 #include <Formats/FormatSettings.h>
 #include <Processors/Formats/RowInputFormatWithNamesAndTypes.h>
+#include <Processors/Formats/ISchemaReader.h>
 
 
 namespace DB
@@ -36,17 +37,27 @@ private:
     void skipFieldDelimiter() override;
     void skipRowEndDelimiter() override;
 
-    std::vector<String> readHeaderRow();
-    std::vector<String> readNames() override { return readHeaderRow(); }
-    std::vector<String> readTypes() override { return readHeaderRow(); }
-    String readFieldIntoString();
-
     void checkNullValueForNonNullable(DataTypePtr type) override;
 
     bool parseFieldDelimiterWithDiagnosticInfo(WriteBuffer & out) override;
     bool parseRowEndWithDiagnosticInfo(WriteBuffer & out) override;
     bool isGarbageAfterField(size_t, ReadBuffer::Position pos) override { return *pos != '\n' && *pos != '\t'; }
 
+    bool is_raw;
+};
+
+class TabSeparatedSchemaReader : public FormatWithNamesAndTypesSchemaReader
+{
+public:
+    TabSeparatedSchemaReader(bool with_names_, bool with_types_, bool is_raw_);
+
+    Names readColumnNames(ReadBuffer & in) override;
+    Names readDataTypeNames(ReadBuffer & in) override;
+
+private:
+    DataTypes determineTypesFromData(ReadBuffer & in) override;
+
+    std::vector<std::string> readRow(ReadBuffer & in);
     bool is_raw;
 };
 

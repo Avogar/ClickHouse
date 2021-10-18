@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Core/Block.h>
-#include <Processors/Formats/IRowInputFormat.h>
 #include <Processors/Formats/RowInputFormatWithNamesAndTypes.h>
+#include <Processors/Formats/ISchemaReader.h>
 
 
 namespace DB
@@ -33,13 +33,28 @@ private:
     void skipTypes() override;
     void skipHeaderRow();
 
-    std::vector<String> readNames() override;
-    std::vector<String> readTypes() override;
-    std::vector<String> readHeaderRow();
-
     /// Data types read from input data.
     DataTypes read_data_types;
-    UInt64 read_columns = 0;
+    UInt64 read_columns;
+};
+
+class BinaryWithNamesAndTypesSchemaReader : public FormatWithNamesAndTypesSchemaReader
+{
+public:
+    BinaryWithNamesAndTypesSchemaReader();
+
+    Names readColumnNames(ReadBuffer & in) override;
+    Names readDataTypeNames(ReadBuffer & in) override;
+
+private:
+    DataTypes determineTypesFromData(ReadBuffer &) override
+    {
+        throw Exception{ErrorCodes::NOT_IMPLEMENTED, "Method determineTypesFromData is not implemented in BinaryWithNamesAndTypesSchemaReader"};
+    }
+
+    std::vector<std::string> readRow(ReadBuffer & in);
+
+    UInt64 read_columns;
 };
 
 }

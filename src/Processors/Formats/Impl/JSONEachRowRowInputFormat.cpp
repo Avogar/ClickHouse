@@ -286,11 +286,7 @@ void JSONEachRowRowInputFormat::readPrefix()
     skipBOMIfExists(*in);
 
     skipWhitespaceIfAny(*in);
-    if (!in->eof() && *in->position() == '[')
-    {
-        ++in->position();
-        data_in_square_brackets = true;
-    }
+    data_in_square_brackets = checkChar('[', *in);
 }
 
 void JSONEachRowRowInputFormat::readSuffix()
@@ -309,6 +305,38 @@ void JSONEachRowRowInputFormat::readSuffix()
     assertEOF(*in);
 }
 
+JSONEachRowSchemaReader::JSONEachRowSchemaReader(bool json_strings_, const FormatSettings & format_settings)
+    : json_strings(json_strings_), max_depth_for_schema_inference(format_settings.max_depth_for_schema_inference)
+{
+}
+
+NamesAndTypesList JSONEachRowSchemaReader::readSchema(ReadBuffer & in)
+{
+    skipBOMIfExists(in);
+    skipWhitespaceIfAny(in);
+    checkChar('[', in);
+
+    Names column_names;
+    auto extractor = [&](const Poco::Dynamic::Var & var)
+    {
+        if (!var.isStruct())
+            throw Exception{ErrorCodes::INCORRECT_DATA, "JSONEachRow row is not a JSON object"};
+
+        Poco::JSON::Object::Ptr object = var.extract<Poco::JSON::Object::Ptr>();
+        if (!column_names.empty())
+            column_names = object->getNames();
+        else if (column_names != object->getNames())
+            throw Exception{ErrorCodes::INCORRECT_DATA, "JSONEachRow rows contains different sets of column names"};
+
+        std::vector<Poco::Dynamic::Var> fields;
+        for (size_t i = 0; i != object->size(); ++i)
+            fields.push_back(object->get(column_names[i]));
+        return fields;
+    };
+
+    auto data_types = determineColumnDataTypesFromJSONEachRowData(in, max_depth_for_schema_inference, json_strings, extractor);
+    return NamesAndTypesList::createFromNamesAndTypes(column_names, data_types);
+}
 
 void registerInputFormatJSONEachRow(FormatFactory & factory)
 {
@@ -341,6 +369,19 @@ void registerNonTrivialPrefixAndSuffixCheckerJSONEachRow(FormatFactory & factory
 {
     factory.registerNonTrivialPrefixAndSuffixChecker("JSONEachRow", nonTrivialPrefixAndSuffixCheckerJSONEachRowImpl);
     factory.registerNonTrivialPrefixAndSuffixChecker("JSONStringsEachRow", nonTrivialPrefixAndSuffixCheckerJSONEachRowImpl);
+}
+
+void registerJSONEachRowSchemaReader(FormatFactory & factory)
+{
+    factory.registerSchemaReader("JSONEachRow", [](const FormatSettings & settings)
+    {
+        return std::make_unique<JSONEachRowSchemaReader>(false, settings);
+    });
+
+    factory.registerSchemaReader("JSONStringsEachRow", [](const FormatSettings & settings)
+    {
+        return std::make_unique<JSONEachRowSchemaReader>(true, settings);
+    });
 }
 
 }

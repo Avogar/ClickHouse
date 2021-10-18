@@ -105,14 +105,20 @@ static size_t countIndicesForType(std::shared_ptr<arrow::DataType> type)
     return 1;
 }
 
-void ORCBlockInputFormat::prepareReader()
+static void getFileReaderAndSchema(
+    ReadBuffer & in, std::unique_ptr<arrow::adapters::orc::ORCFileReader> & file_reader, std::shared_ptr<arrow::Schema> & schema)
 {
     THROW_ARROW_NOT_OK(arrow::adapters::orc::ORCFileReader::Open(asArrowFile(*in, format_settings), arrow::default_memory_pool(), &file_reader));
+    THROW_ARROW_NOT_OK(file_reader->ReadSchema(&schema));
+}
+
+void ORCBlockInputFormat::prepareReader()
+{
+    std::shared_ptr<arrow::Schema> schema;
+    getFileReaderAndSchema(*in, file_reader, schema);
+
     stripe_total = file_reader->NumberOfStripes();
     stripe_current = 0;
-
-    std::shared_ptr<arrow::Schema> schema;
-    THROW_ARROW_NOT_OK(file_reader->ReadSchema(&schema));
 
     arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(getPort().getHeader(), "ORC", format_settings.orc.import_nested);
 
@@ -139,7 +145,16 @@ void ORCBlockInputFormat::prepareReader()
     }
 }
 
-void registerInputFormatORC(FormatFactory &factory)
+NamesAndTypesList ORCSchemaReader::readSchema(ReadBuffer & in)
+{
+    std::unique_ptr<arrow::adapters::orc::ORCFileReader> file_reader;
+    std::shared_ptr<arrow::Schema> schema;
+    getFileReaderAndSchema(in, file_reader, schema);
+    auto header = ArrowColumnToCHColumn::arrowSchemaToCHHeader(*schema, "ORC");
+    return header.getNamesAndTypesList();
+}
+
+void registerInputFormatORC(FormatFactory & factory)
 {
     factory.registerInputFormat(
             "ORC",
@@ -151,6 +166,17 @@ void registerInputFormatORC(FormatFactory &factory)
                 return std::make_shared<ORCBlockInputFormat>(buf, sample, settings);
             });
     factory.markFormatAsColumnOriented("ORC");
+}
+
+void registerORCSchemaReader(FormatFactory & factory)
+{
+    factory.registerSchemaReader(
+        "ORC",
+        [](const FormatSettings &)
+        {
+            return std::make_shared<ORCSchemaReader>();
+        }
+        );
 }
 
 }

@@ -1,6 +1,7 @@
 #include <Processors/Formats/Impl/JSONCompactEachRowRowInputFormat.h>
 
 #include <IO/ReadHelpers.h>
+#include <IO/PeekableReadBuffer.h>
 #include <IO/Operators.h>
 #include <Formats/FormatFactory.h>
 #include <Formats/verbosePrintString.h>
@@ -10,6 +11,8 @@
 #include <DataTypes/Serializations/SerializationNullable.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
+#include <Poco/JSON/Parser.h>
 
 namespace DB
 {
@@ -17,6 +20,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int INCORRECT_DATA;
+    extern const int CANNOT_EXTRACT_TABLE_STRUCTURE;
 }
 
 inline void skipEndOfLine(ReadBuffer & in);
@@ -29,15 +33,39 @@ JSONCompactEachRowRowInputFormat::JSONCompactEachRowRowInputFormat(
     bool with_types_,
     bool yield_strings_,
     const FormatSettings & format_settings_)
-    : RowInputFormatWithNamesAndTypes(header_, in_, std::move(params_), with_names_, with_types_, format_settings_)
+    : RowInputFormatWithNamesAndTypes(
+        header_,
+        in_,
+        std::move(params_),
+        with_names_,
+        with_types_,
+        format_settings_,
+        std::make_unique<JSONCompactEachRowRowSchemaReader>(with_names_, with_types_, yield_strings_, format_settings_))
     , yield_strings(yield_strings_)
 {
 }
 
+static void skipJSONCompactRowStartDelimiter(ReadBuffer & in)
+{
+    skipWhitespaceIfAny(in);
+    assertChar('[', in);
+}
+
+static void skipJSONCompactRowEndDelimiter(ReadBuffer & in)
+{
+    skipWhitespaceIfAny(in);
+    assertChar(']', in);
+
+    skipWhitespaceIfAny(in);
+    if (!in.eof() && (*in.position() == ',' || *in.position() == ';'))
+        ++in.position();
+
+    skipWhitespaceIfAny(in);
+}
+
 void JSONCompactEachRowRowInputFormat::skipRowStartDelimiter()
 {
-    skipWhitespaceIfAny(*in);
-    assertChar('[', *in);
+    skipJSONCompactRowStartDelimiter(*in);
 }
 
 void JSONCompactEachRowRowInputFormat::skipFieldDelimiter()
@@ -48,22 +76,7 @@ void JSONCompactEachRowRowInputFormat::skipFieldDelimiter()
 
 void JSONCompactEachRowRowInputFormat::skipRowEndDelimiter()
 {
-    skipWhitespaceIfAny(*in);
-    assertChar(']', *in);
-
-    skipWhitespaceIfAny(*in);
-    if (!in->eof() && (*in->position() == ',' || *in->position() == ';'))
-        ++in->position();
-
-    skipWhitespaceIfAny(*in);
-}
-
-String JSONCompactEachRowRowInputFormat::readFieldIntoString()
-{
-    skipWhitespaceIfAny(*in);
-    String field;
-    readJSONString(field, *in);
-    return field;
+    skipJSONCompactRowEndDelimiter(*in);
 }
 
 void JSONCompactEachRowRowInputFormat::skipField(size_t file_column)
@@ -86,21 +99,6 @@ void JSONCompactEachRowRowInputFormat::skipHeaderRow()
     while (checkChar(',', *in));
 
     skipRowEndDelimiter();
-}
-
-std::vector<String> JSONCompactEachRowRowInputFormat::readHeaderRow()
-{
-    skipRowStartDelimiter();
-    std::vector<String> fields;
-    do
-    {
-        fields.push_back(readFieldIntoString());
-        skipWhitespaceIfAny(*in);
-    }
-    while (checkChar(',', *in));
-
-    skipRowEndDelimiter();
-    return fields;
 }
 
 bool JSONCompactEachRowRowInputFormat::readField(IColumn & column, const DataTypePtr & type, const SerializationPtr & serialization, bool /*is_last_file_column*/, const String & column_name)
@@ -183,6 +181,57 @@ bool JSONCompactEachRowRowInputFormat::parseRowEndWithDiagnosticInfo(WriteBuffer
     return true;
 }
 
+JSONCompactEachRowRowSchemaReader::JSONCompactEachRowRowSchemaReader(bool with_names_, bool with_types_, bool json_strings_, const FormatSettings & format_settings_)
+    : FormatWithNamesAndTypesSchemaReader(with_names_, with_types_), json_strings(json_strings_), max_depth_for_schema_inference(format_settings_.max_depth_for_schema_inference)
+{
+}
+
+std::vector<String> JSONCompactEachRowRowSchemaReader::readRow(ReadBuffer & in)
+{
+    skipJSONCompactRowStartDelimiter(in);
+    std::vector<String> fields;
+    String field;
+    do
+    {
+        skipWhitespaceIfAny(in);
+        readJSONString(field, in);
+        fields.push_back(field);
+        skipWhitespaceIfAny(in);
+    }
+    while (checkChar(',', in));
+
+    skipJSONCompactRowEndDelimiter(in);
+    return fields;
+}
+
+Names JSONCompactEachRowRowSchemaReader::readColumnNames(ReadBuffer & in)
+{
+    return readRow(in);
+}
+
+Names JSONCompactEachRowRowSchemaReader::readDataTypeNames(ReadBuffer & in)
+{
+    return readRow(in);
+}
+
+DataTypes JSONCompactEachRowRowSchemaReader::determineTypesFromData(ReadBuffer & in)
+{
+    auto extractor = [](const Poco::Dynamic::Var & var)
+    {
+        if (!var.isArray())
+            throw Exception{ErrorCodes::INCORRECT_DATA, "JSONEachCompact row is not a JSON array"};
+
+        Poco::JSON::Array::Ptr array = var.extract<Poco::JSON::Array::Ptr>();
+        std::vector<Poco::Dynamic::Var> fields;
+        fields.reserve(array->size());
+        for (size_t i = 0; i != array->size(); ++i)
+            fields.push_back(array->get(i));
+        return fields;
+    };
+
+    return determineColumnDataTypesFromJSONCompactEachRowData(in, max_depth_for_schema_inference, json_strings, extractor);
+}
+
 void registerInputFormatJSONCompactEachRow(FormatFactory & factory)
 {
     for (bool yield_strings : {true, false})
@@ -200,6 +249,21 @@ void registerInputFormatJSONCompactEachRow(FormatFactory & factory)
         };
 
         registerWithNamesAndTypes(yield_strings ? "JSONCompactStringsEachRow" : "JSONCompactEachRow", register_func);
+    }
+}
+
+void registerJSONCompactEachRowSchemaReader(FormatFactory & factory)
+{
+    for (bool json_strings : {false, true})
+    {
+        auto register_func = [&](const String & format_name, bool with_names, bool with_types)
+        {
+            factory.registerSchemaReader(format_name, [=](const FormatSettings & format_settings)
+            {
+                return std::make_shared<JSONCompactEachRowRowSchemaReader>(with_names, with_types, json_strings, format_settings);
+            });
+        };
+        registerWithNamesAndTypes(json_strings ? "JSONCompactStringsEachRow" : "JSONCompactEachRow", register_func);
     }
 }
 

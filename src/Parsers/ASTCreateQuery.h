@@ -49,6 +49,8 @@ public:
     ASTPtr clone() const override;
 
     void formatImpl(const FormatSettings & s, FormatState & state, FormatStateStacked frame) const override;
+
+    bool empty() { return !columns && !indices && !constraints && !projections && !primary_key; }
 };
 
 
