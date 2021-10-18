@@ -193,4 +193,12 @@ void registerNonTrivialPrefixAndSuffixCheckerJSONAsString(FormatFactory & factor
     factory.registerNonTrivialPrefixAndSuffixChecker("JSONAsString", nonTrivialPrefixAndSuffixCheckerJSONEachRowImpl);
 }
 
+void registerJSONAsStringSchemaReader(FormatFactory & factory)
+{
+    factory.registerExternalSchemaReader("JSONAsString", [](const FormatSettings &)
+    {
+        return std::make_shared<JSONAsStringExternalSchemaReader>();
+    });
+}
+
 }

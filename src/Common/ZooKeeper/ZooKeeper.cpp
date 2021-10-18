@@ -26,6 +26,7 @@ namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
     extern const int NOT_IMPLEMENTED;
+    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 }
 }
 
@@ -1131,6 +1132,45 @@ Coordination::RequestPtr makeCheckRequest(const std::string & path, int version)
     request->path = path;
     request->version = version;
     return request;
+}
+
+std::string normalizeZooKeeperPath(String zookeeper_path)
+{
+    if (!zookeeper_path.empty() && zookeeper_path.back() == '/')
+        zookeeper_path.resize(zookeeper_path.size() - 1);
+    /// If zookeeper chroot prefix is used, path should start with '/', because chroot concatenates without it.
+    if (!zookeeper_path.empty() && zookeeper_path.front() != '/')
+        zookeeper_path = "/" + zookeeper_path;
+
+    return zookeeper_path;
+}
+
+String extractZooKeeperName(const String & path)
+{
+    if (path.empty())
+        throw DB::Exception("ZooKeeper path should not be empty", DB::ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    auto pos = path.find(':');
+    if (pos != String::npos)
+    {
+        auto zookeeper_name = path.substr(0, pos);
+        if (zookeeper_name.empty())
+            throw DB::Exception("Zookeeper path should start with '/' or '<auxiliary_zookeeper_name>:/'", DB::ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+        return zookeeper_name;
+    }
+    static constexpr auto default_zookeeper_name = "default";
+    return default_zookeeper_name;
+}
+
+String extractZooKeeperPath(const String & path)
+{
+    if (path.empty())
+        throw DB::Exception("ZooKeeper path should not be empty", DB::ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    auto pos = path.find(':');
+    if (pos != String::npos)
+    {
+        return normalizeZooKeeperPath(path.substr(pos + 1, String::npos));
+    }
+    return normalizeZooKeeperPath(path);
 }
 
 }

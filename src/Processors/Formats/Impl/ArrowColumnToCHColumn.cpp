@@ -482,7 +482,7 @@ static void checkStatus(const arrow::Status & status, const String & column_name
         throw Exception{ErrorCodes::UNKNOWN_EXCEPTION, "Error with a {} column '{}': {}.", format_name, column_name, status.ToString()};
 }
 
-static Block arrowSchemaToCHHeader(const arrow::Schema & schema, const std::string & format_name)
+Block ArrowColumnToCHColumn::arrowSchemaToCHHeader(const arrow::Schema & schema, const std::string & format_name)
 {
     ColumnsWithTypeAndName sample_columns;
     for (const auto & field : schema.fields())
@@ -492,22 +492,19 @@ static Block arrowSchemaToCHHeader(const arrow::Schema & schema, const std::stri
         std::unique_ptr<arrow::ArrayBuilder> array_builder;
         arrow::Status status = MakeBuilder(pool, field->type(), &array_builder);
         checkStatus(status, field->name(), format_name);
+
         std::shared_ptr<arrow::Array> arrow_array;
         status = array_builder->Finish(&arrow_array);
         checkStatus(status, field->name(), format_name);
+
         arrow::ArrayVector array_vector = {arrow_array};
         auto arrow_column = std::make_shared<arrow::ChunkedArray>(array_vector);
         std::unordered_map<std::string, std::shared_ptr<ColumnWithTypeAndName>> dict_values;
         ColumnWithTypeAndName sample_column = readColumnFromArrowColumn(arrow_column, field->name(), format_name, false, dict_values);
+
         sample_columns.emplace_back(std::move(sample_column));
     }
     return Block(std::move(sample_columns));
-}
-
-ArrowColumnToCHColumn::ArrowColumnToCHColumn(
-    const arrow::Schema & schema, const std::string & format_name_, bool import_nested_)
-    : header(arrowSchemaToCHHeader(schema, format_name_)), format_name(format_name_), import_nested(import_nested_)
-{
 }
 
 ArrowColumnToCHColumn::ArrowColumnToCHColumn(

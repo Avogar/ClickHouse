@@ -5,7 +5,6 @@
 #include <Formats/registerWithNamesAndTypes.h>
 #include <DataTypes/DataTypeFactory.h>
 
-
 namespace DB
 {
 
@@ -77,6 +76,36 @@ void BinaryRowInputFormat::skipField(size_t file_column)
     read_data_types[file_column]->getDefaultSerialization()->deserializeBinary(field, *in);
 }
 
+Names BinaryWithNamesAndTypesSchemaReader::readColumnNames(ReadBuffer & in, UInt64 columns) const
+{
+    std::vector<String> column_names;
+    String column_name;
+    for (size_t i = 0; i < columns; ++i)
+    {
+        readStringBinary(column_name, in);
+        column_names.push_back(column_name);
+    }
+    return column_names;
+}
+
+DataTypes BinaryWithNamesAndTypesSchemaReader::readColumnDataTypes(ReadBuffer & in, UInt64 columns) const
+{
+    std::vector<String> type_names = readColumnNames(in, columns);
+    std::vector<DataTypePtr> data_types;
+    for (const auto & type_name : type_names)
+        data_types.push_back(DataTypeFactory::instance().get(type_name));
+    return data_types;
+}
+
+NamesAndTypesList BinaryWithNamesAndTypesSchemaReader::readSchema(ReadBuffer & in) const
+{
+    UInt64 columns;
+    readVarUInt(columns, in);
+    auto column_names = readColumnNames(in, columns);
+    auto column_types = readColumnDataTypes(in, columns);
+    return NamesAndTypesList::createFromNamesAndTypes(column_names, column_types);
+}
+
 void registerInputFormatRowBinary(FormatFactory & factory)
 {
     auto register_func = [&](const String & format_name, bool with_names, bool with_types)
@@ -93,5 +122,14 @@ void registerInputFormatRowBinary(FormatFactory & factory)
 
     registerWithNamesAndTypes("RowBinary", register_func);
 }
+
+void registerRowBinaryWithNamesAndTypesSchemaReader(FormatFactory & factory)
+{
+    factory.registerSchemaReader("RowBinaryWithNamesAndTypes", [](const FormatSettings &)
+    {
+        return std::make_shared<BinaryWithNamesAndTypesSchemaReader>();
+    });
+}
+
 
 }

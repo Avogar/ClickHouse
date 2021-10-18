@@ -10,6 +10,7 @@
 #include <DataTypes/Serializations/SerializationNullable.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
 
 namespace DB
 {
@@ -183,6 +184,67 @@ bool JSONCompactEachRowRowInputFormat::parseRowEndWithDiagnosticInfo(WriteBuffer
     return true;
 }
 
+JSONCompactEachRowRowSchemaReader::JSONCompactEachRowRowSchemaReader(bool with_names_, bool with_types_)
+    : with_names(with_names_), with_types(with_types_)
+{
+}
+
+std::vector<String> JSONCompactEachRowRowSchemaReader::readLine(ReadBuffer & in) const
+{
+    std::vector<String> fields;
+    String field;
+    assertChar('[', in);
+    do
+    {
+        skipWhitespaceIfAny(in);
+        readJSONString(field, in);
+        fields.push_back(field);
+        skipWhitespaceIfAny(in);
+    }
+    while (checkChar(',', in));
+    assertChar(']', in);
+    skipEndOfLine(in);
+    return fields;
+}
+
+NamesAndTypesList JSONCompactEachRowRowSchemaReader::readSchema(ReadBuffer & in) const
+{
+    skipBOMIfExists(in);
+
+    Names column_names;
+    if (with_names)
+        column_names = readColumnNames(in);
+
+    DataTypes data_types = readColumnDataTypes(in);
+    if (column_names.empty())
+        column_names = generateDefaultColumnNames(data_types.size());
+
+    return NamesAndTypesList::createFromNamesAndTypes(column_names, data_types);
+}
+
+Names JSONCompactEachRowRowSchemaReader::readColumnNames(ReadBuffer & in) const
+{
+    return readLine(in);
+}
+
+DataTypes JSONCompactEachRowRowSchemaReader::readColumnDataTypes(ReadBuffer & in) const
+{
+    DataTypes data_types;
+    if (with_types)
+    {
+        std::vector<String> type_names = readLine(in);
+        data_types.reserve(type_names.size());
+        for (const auto & type_name : type_names)
+            data_types.push_back(DataTypeFactory::instance().get(type_name));
+    }
+    else
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented");
+    }
+
+    return data_types;
+}
+
 void registerInputFormatJSONCompactEachRow(FormatFactory & factory)
 {
     for (bool yield_strings : {true, false})
@@ -201,6 +263,29 @@ void registerInputFormatJSONCompactEachRow(FormatFactory & factory)
 
         registerWithNamesAndTypes(yield_strings ? "JSONCompactStringsEachRow" : "JSONCompactEachRow", register_func);
     }
+}
+
+void registerJSONCompactEachRowSchemaReader(FormatFactory & factory)
+{
+    factory.registerSchemaReader("JSONCompactEachRowWithNames", [](const FormatSettings &)
+    {
+        return std::make_shared<JSONCompactEachRowRowSchemaReader>(true, false);
+    });
+
+    factory.registerSchemaReader("JSONCompactStringsEachRowWithNames", [](const FormatSettings &)
+    {
+        return std::make_shared<JSONCompactEachRowRowSchemaReader>(true, false);
+    });
+
+    factory.registerSchemaReader("JSONCompactEachRowWithNamesAndTypes", [](const FormatSettings &)
+    {
+        return std::make_shared<JSONCompactEachRowRowSchemaReader>(true, true);
+    });
+
+    factory.registerSchemaReader("JSONCompactStringsEachRowWithNamesAndTypes", [](const FormatSettings &)
+    {
+        return std::make_shared<JSONCompactEachRowRowSchemaReader>(true, true);
+    });
 }
 
 void registerFileSegmentationEngineJSONCompactEachRow(FormatFactory & factory)

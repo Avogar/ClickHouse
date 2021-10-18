@@ -1,6 +1,8 @@
 #pragma once
 
 #include <Processors/Formats/IRowInputFormat.h>
+#include <Processors/Formats/ISchemaReader.h>
+#include <DataTypes/DataTypeString.h>
 
 
 namespace DB
@@ -18,6 +20,19 @@ public:
 
     bool readRow(MutableColumns & columns, RowReadExtension &) override;
     String getName() const override { return "RawBLOBRowInputFormat"; }
+};
+
+class RawBLOBSchemaReader: public IExternalSchemaReader
+{
+public:
+    RawBLOBSchemaReader(const FormatSettings & format_settings_)
+    {
+    }
+
+    NamesAndTypesList readSchema() const override
+    {
+        return {{"raw_blob", std::make_shared<DataTypeString>()}};
+    }
 };
 
 }

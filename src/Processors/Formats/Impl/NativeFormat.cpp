@@ -3,6 +3,7 @@
 #include <Formats/FormatFactory.h>
 #include <Processors/Formats/IInputFormat.h>
 #include <Processors/Formats/IOutputFormat.h>
+#include <Processors/Formats/ISchemaReader.h>
 #include <Processors/Transforms/AggregatingTransform.h>
 
 
@@ -82,6 +83,18 @@ private:
     NativeWriter writer;
 };
 
+class NativeSchemaReader : public ISchemaReader
+{
+public:
+    NamesAndTypesList readSchema(ReadBuffer & in) const override
+    {
+        auto reader = NativeReader(in, 0);
+        auto block = reader.read();
+        return block.getNamesAndTypesList();
+    }
+};
+
+
 void registerInputFormatNative(FormatFactory & factory)
 {
     factory.registerInputFormat("Native", [](
@@ -105,5 +118,15 @@ void registerOutputFormatNative(FormatFactory & factory)
         return std::make_shared<NativeOutputFormat>(buf, sample);
     });
 }
+
+
+void registerNativeSchemaReader(FormatFactory & factory)
+{
+    factory.registerSchemaReader("Native", [](const FormatSettings &)
+    {
+        return std::make_shared<NativeSchemaReader>();
+    });
+}
+
 
 }

@@ -1,8 +1,8 @@
 #pragma once
 
 #include <Core/Block.h>
-#include <Processors/Formats/IRowInputFormat.h>
 #include <Processors/Formats/RowInputFormatWithNamesAndTypes.h>
+#include <Processors/Formats/ISchemaReader.h>
 
 
 namespace DB
@@ -40,6 +40,16 @@ private:
     /// Data types read from input data.
     DataTypes read_data_types;
     UInt64 read_columns = 0;
+};
+
+class BinaryWithNamesAndTypesSchemaReader : public ISchemaReader
+{
+public:
+    NamesAndTypesList readSchema(ReadBuffer & in) const override;
+
+private:
+    Names readColumnNames(ReadBuffer & in, UInt64 columns) const;
+    DataTypes readColumnDataTypes(ReadBuffer & in, UInt64 columns) const;
 };
 
 }

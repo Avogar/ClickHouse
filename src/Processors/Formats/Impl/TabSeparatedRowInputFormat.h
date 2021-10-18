@@ -3,6 +3,7 @@
 #include <Core/Block.h>
 #include <Formats/FormatSettings.h>
 #include <Processors/Formats/RowInputFormatWithNamesAndTypes.h>
+#include <Processors/Formats/ISchemaReader.h>
 
 
 namespace DB
@@ -48,6 +49,23 @@ private:
     bool parseFieldDelimiterWithDiagnosticInfo(WriteBuffer & out) override;
     bool parseRowEndWithDiagnosticInfo(WriteBuffer & out) override;
     bool isGarbageAfterField(size_t, ReadBuffer::Position pos) override { return *pos != '\n' && *pos != '\t'; }
+};
+
+class TabSeparatedSchemaReader : public ISchemaReader
+{
+public:
+    TabSeparatedSchemaReader(bool with_names_, bool with_types_, bool tsv_raw_);
+
+    NamesAndTypesList readSchema(ReadBuffer & in) const override;
+
+    Names readColumnNames(ReadBuffer & in) const;
+    DataTypes readColumnDataTypes(ReadBuffer & in) const;
+
+private:
+    std::vector<std::string> readLine(ReadBuffer & in) const;
+    bool with_names;
+    bool with_types;
+    bool tsv_raw;
 };
 
 }

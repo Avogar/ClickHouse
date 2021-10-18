@@ -8,6 +8,9 @@
 #include <Formats/registerWithNamesAndTypes.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/Serializations/SerializationNullable.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
 
 namespace DB
 {
@@ -218,6 +221,78 @@ void TabSeparatedRowInputFormat::syncAfterError()
     skipToUnescapedNextLineOrEOF(*in);
 }
 
+
+TabSeparatedSchemaReader::TabSeparatedSchemaReader(bool with_names_, bool with_types_, bool tsv_raw_)
+    : with_names(with_names_), with_types(with_types_), tsv_raw(tsv_raw_)
+{
+}
+
+std::vector<String> TabSeparatedSchemaReader::readLine(ReadBuffer & in) const
+{
+    std::vector<String> fields;
+    std::string field;
+    while (true)
+    {
+        readEscapedString(field, in);
+        fields.push_back(field);
+        if (!checkChar('\t', in))
+        {
+            checkForCarriageReturn(in);
+            break;
+        }
+    }
+
+    if (!in.eof())
+    {
+        assertChar('\n', in);
+    }
+
+    if (fields.empty())
+        throw Exception{ErrorCodes::INCORRECT_DATA, "Unexpected empty line"};
+
+    return fields;
+}
+
+Names TabSeparatedSchemaReader::readColumnNames(ReadBuffer & in) const
+{
+    return readLine(in);
+}
+
+DataTypes TabSeparatedSchemaReader::readColumnDataTypes(ReadBuffer & in) const
+{
+    DataTypes data_types;
+    std::vector<String> fields = readLine(in);
+    if (with_types)
+    {
+        data_types.reserve(fields.size());
+        for (const auto & type_name : fields)
+            data_types.push_back(DataTypeFactory::instance().get(type_name));
+    }
+    else
+    {
+        for (size_t i = 0; i != fields.size(); ++i)
+            data_types.push_back(std::make_shared<DataTypeNullable>(std::make_shared<DataTypeString>()));
+    }
+
+    return data_types;
+}
+
+NamesAndTypesList TabSeparatedSchemaReader::readSchema(ReadBuffer & in) const
+{
+    skipBOMIfExists(in);
+
+    Names column_names;
+    if (with_names)
+        column_names = readColumnNames(in);
+    
+    DataTypes data_types = readColumnDataTypes(in);
+    if (column_names.empty())
+        column_names = generateDefaultColumnNames(data_types.size());
+    
+    return NamesAndTypesList::createFromNamesAndTypes(column_names, data_types);
+}
+
+
 void registerInputFormatTabSeparated(FormatFactory & factory)
 {
     for (bool is_raw : {false, true})
@@ -238,6 +313,61 @@ void registerInputFormatTabSeparated(FormatFactory & factory)
         registerWithNamesAndTypes(is_raw ? "TSVRaw" : "TSV", register_func);
     }
 }
+
+void registerTSVSchemaReader(FormatFactory & factory)
+{
+    for (const auto * name : {"TabSeparated", "TSV"})
+    {
+        factory.registerSchemaReader(name, [](const FormatSettings &)
+        {
+            return std::make_shared<TabSeparatedSchemaReader>(false, false);
+        });
+    }
+
+    for (const auto * name : {"TabSeparatedRaw", "TSVRaw"})
+    {
+        factory.registerSchemaReader(name, [](const FormatSettings &)
+        {
+            return std::make_shared<TabSeparatedSchemaReader>(false, false);
+        });
+    }
+
+    for (const auto * name : {"TabSeparatedWithNames", "TSVWithNames"})
+    {
+        factory.registerInputFormat(name, [](
+                                                       ReadBuffer & buf,
+                                                       const Block & sample,
+                                                       IRowInputFormat::Params params,
+                                                       const FormatSettings & settings)
+                                             {
+                                                 return std::make_shared<TabSeparatedRowInputFormat>(sample, buf, params, true, false, settings);
+                                             });
+    }
+
+    for (const auto * name : {"TabSeparatedWithNamesAndTypes", "TSVWithNamesAndTypes"})
+    {
+        factory.registerInputFormat(name, [](
+                                                       ReadBuffer & buf,
+                                                       const Block & sample,
+                                                       IRowInputFormat::Params params,
+                                                       const FormatSettings & settings)
+                                             {
+                                                 return std::make_shared<TabSeparatedRowInputFormat>(sample, buf, params, true, true, settings);
+                                             });
+    }
+
+
+    factory.registerSchemaReader("TSVWithNamesAndTypes", [](const FormatSettings &)
+    {
+        return std::make_shared<TabSeparatedSchemaReader>(true, true);
+    });
+
+    factory.registerSchemaReader("TabSeparatedWithNamesAndTypes", [](const FormatSettings &)
+    {
+        return std::make_shared<TabSeparatedSchemaReader>(true, true);
+    });
+}
+
 
 static std::pair<bool, size_t> fileSegmentationEngineTabSeparatedImpl(ReadBuffer & in, DB::Memory<> & memory, size_t min_chunk_size, bool is_raw, size_t min_rows)
 {

@@ -5,6 +5,7 @@
 
 #include <Core/Block.h>
 #include <Processors/Formats/RowInputFormatWithNamesAndTypes.h>
+#include <Processors/Formats/ISchemaReader.h>
 #include <Formats/FormatSettings.h>
 
 
@@ -52,6 +53,15 @@ private:
     std::vector<String> readTypes() override { return readHeaderRow(); }
 
     String readFieldIntoString();
+};
+
+class CSVSchemaReader : public ISchemaReader
+{
+public:
+    NamesAndTypesList readSchema(ReadBuffer & in) const override;
+
+private:
+    bool with_names;
 };
 
 }

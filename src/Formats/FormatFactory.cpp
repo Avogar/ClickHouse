@@ -61,6 +61,7 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.csv.null_representation = settings.output_format_csv_null_representation;
     format_settings.csv.unquoted_null_literal_as_null = settings.input_format_csv_unquoted_null_literal_as_null;
     format_settings.csv.input_format_arrays_as_nested_csv = settings.input_format_csv_arrays_as_nested_csv;
+    format_settings.csv.check_types = settings.input_format_csv_check_types;
     format_settings.custom.escaping_rule = settings.format_custom_escaping_rule;
     format_settings.custom.field_delimiter = settings.format_custom_field_delimiter;
     format_settings.custom.result_after_delimiter = settings.format_custom_result_after_delimiter;
@@ -103,6 +104,7 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.tsv.empty_as_default = settings.input_format_tsv_empty_as_default;
     format_settings.tsv.input_format_enum_as_number = settings.input_format_tsv_enum_as_number;
     format_settings.tsv.null_representation = settings.output_format_tsv_null_representation;
+    format_settings.tsv.check_types = settings.input_format_tsv_check_types;
     format_settings.values.accurate_types_of_literals = settings.input_format_values_accurate_types_of_literals;
     format_settings.values.deduce_templates_of_expressions = settings.input_format_values_deduce_templates_of_expressions;
     format_settings.values.interpret_expressions = settings.input_format_values_interpret_expressions;
@@ -114,6 +116,8 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.orc.import_nested = settings.input_format_orc_import_nested;
     format_settings.defaults_for_omitted_fields = settings.input_format_defaults_for_omitted_fields;
     format_settings.capn_proto.enum_comparing_mode = settings.format_capn_proto_enum_comparising_mode;
+    format_settings.msgpack.number_of_columns = settings.input_format_msgpack_number_of_columns;
+    format_settings.msgpack.max_depth_for_structure_determination = settings.input_format_msgpack_max_depth_for_structure_determination;
 
     /// Validate avro_schema_registry_url with RemoteHostFilter when non-empty and in Server context
     if (format_settings.schema.is_server)
@@ -214,7 +218,12 @@ InputFormatPtr FormatFactory::getInputFormat(
 
     auto format_settings = _format_settings ? *_format_settings : getFormatSettings(context);
 
-    const RowInputFormatParams & params = getRowInputFormatParams(max_block_size, format_settings, settings);
+    RowInputFormatParams params;
+    params.max_block_size = max_block_size;
+    params.allow_errors_num = format_settings.input_allow_errors_num;
+    params.allow_errors_ratio = format_settings.input_allow_errors_ratio;
+    params.max_execution_time = settings.max_execution_time;
+    params.timeout_overflow_mode = settings.timeout_overflow_mode;
     auto format = input_getter(buf, sample, params, format_settings);
 
     /// It's a kludge. Because I cannot remove context from values format.
@@ -222,55 +231,6 @@ InputFormatPtr FormatFactory::getInputFormat(
         values->setContext(context);
 
     return format;
-}
-
-InputFormatPtr FormatFactory::getInputFormat(
-    const String & name,
-    ReadBuffer & buf,
-    IInputFormatHeader & format_header,
-    ContextConstPtr context,
-    UInt64 max_block_size,
-    const std::optional<FormatSettings> & _format_settings) const
-{
-    const auto & input_getter = getCreators(name).input_with_format_header_processor_creator;
-    if (!input_getter)
-        throw Exception("Format " + name + " is not suitable for input with format header", ErrorCodes::FORMAT_IS_NOT_SUITABLE_FOR_INPUT);
-
-    const Settings & settings = context->getSettingsRef();
-
-    auto format_settings = _format_settings
-        ? *_format_settings : getFormatSettings(context);
-
-    const RowInputFormatParams & params = getRowInputFormatParams(max_block_size, format_settings, settings);
-
-    auto format = input_getter(buf, format_header, params, format_settings);
-
-    /// It's a kludge. Because I cannot remove context from values format.
-    if (auto * values = typeid_cast<ValuesBlockInputFormat *>(format.get()))
-        values->setContext(context);
-
-    return format;
-}
-
-InputFormatHeaderPtr FormatFactory::getInputFormatHeader(
-    const String & name,
-    ReadBuffer & buf,
-    ContextConstPtr context,
-    UInt64 max_block_size,
-    const std::optional<FormatSettings> & _format_settings) const
-{
-    const auto & format_header_getter = getCreators(name).input_format_header_creator;
-    if (!format_header_getter)
-        throw Exception("Format header " + name + " is not registered", ErrorCodes::LOGICAL_ERROR);
-
-    const Settings & settings = context->getSettingsRef();
-
-    auto format_settings = _format_settings
-        ? *_format_settings : getFormatSettings(context);
-
-    const RowInputFormatParams & params = getRowInputFormatParams(max_block_size, format_settings, settings);
-
-    return format_header_getter(buf, params, format_settings);
 }
 
 OutputFormatPtr FormatFactory::getOutputFormatParallelIfPossible(
@@ -344,9 +304,30 @@ OutputFormatPtr FormatFactory::getOutputFormat(
     return format;
 }
 
-bool FormatFactory::checkIfInputFormatSupportsFormatHeader(const String & name)
+SchemaReaderPtr FormatFactory::getSchemaReader(
+    const String & name,
+    ContextPtr context,
+    const std::optional<FormatSettings> & _format_settings) const
 {
-    return dict[name].input_with_format_header_processor_creator != nullptr;
+    const auto & schema_reader_creator = dict.at(name).schema_reader_creator;
+    if (!schema_reader_creator)
+        throw Exception("FormatFactory: Format " + name + " doesn't support schema inference.", ErrorCodes::LOGICAL_ERROR);
+
+    auto format_settings = _format_settings ? *_format_settings : getFormatSettings(context);
+    return schema_reader_creator(format_settings);
+}
+
+ExternalSchemaReaderPtr FormatFactory::getExternalSchemaReader(
+    const String & name,
+    ContextPtr context,
+    const std::optional<FormatSettings> & _format_settings) const
+{
+    const auto & external_schema_reader_creator = dict.at(name).external_schema_reader_creator;
+    if (!external_schema_reader_creator)
+        throw Exception("FormatFactory: Format " + name + " doesn't support schema inference.", ErrorCodes::LOGICAL_ERROR);
+
+    auto format_settings = _format_settings ? *_format_settings : getFormatSettings(context);
+    return external_schema_reader_creator(format_settings);
 }
 
 void FormatFactory::registerInputFormat(const String & name, InputCreator input_creator)
@@ -357,28 +338,12 @@ void FormatFactory::registerInputFormat(const String & name, InputCreator input_
     target = std::move(input_creator);
 }
 
-void FormatFactory::registerInputFormatHeader(const String & name, InputFormatHeaderCreator format_header_creator)
-{
-    auto & target = dict[name].input_format_header_creator;
-    if (target)
-        throw Exception("FormatFactory: Input format header " + name + " is already registered", ErrorCodes::LOGICAL_ERROR);
-    target = std::move(format_header_creator);
-}
-
 void FormatFactory::registerNonTrivialPrefixAndSuffixChecker(const String & name, NonTrivialPrefixAndSuffixChecker non_trivial_prefix_and_suffix_checker)
 {
     auto & target = dict[name].non_trivial_prefix_and_suffix_checker;
     if (target)
         throw Exception("FormatFactory: Non trivial prefix and suffix checker " + name + " is already registered", ErrorCodes::LOGICAL_ERROR);
     target = std::move(non_trivial_prefix_and_suffix_checker);
-}
-
-void FormatFactory::registerInputFormatWithFormatHeaderProcessor(const String & name, InputWithFormatHeaderProcessorCreator input_creator)
-{
-    auto & target = dict[name].input_with_format_header_processor_creator;
-    if (target)
-        throw Exception("FormatFactory: Input format " + name + " with format header is already registered", ErrorCodes::LOGICAL_ERROR);
-    target = std::move(input_creator);
 }
 
 void FormatFactory::registerOutputFormat(const String & name, OutputCreator output_creator)
@@ -397,6 +362,21 @@ void FormatFactory::registerFileSegmentationEngine(const String & name, FileSegm
     target = std::move(file_segmentation_engine);
 }
 
+void FormatFactory::registerSchemaReader(const String & name, SchemaReaderCreator schema_reader_creator)
+{
+    auto & target = dict[name].schema_reader_creator;
+    if (target)
+        throw Exception("FormatFactory: Input header reader " + name + " is already registered", ErrorCodes::LOGICAL_ERROR);
+    target = std::move(schema_reader_creator);
+}
+
+void FormatFactory::registerExternalSchemaReader(const String & name, ExternalSchemaReaderCreator external_schema_reader_creator)
+{
+    auto & target = dict[name].external_schema_reader_creator;
+    if (target)
+        throw Exception("FormatFactory: Input header reader " + name + " is already registered", ErrorCodes::LOGICAL_ERROR);
+    target = std::move(external_schema_reader_creator);
+}
 
 void FormatFactory::markOutputFormatSupportsParallelFormatting(const String & name)
 {
@@ -432,6 +412,23 @@ bool FormatFactory::isOutputFormat(const String & name) const
 {
     auto it = dict.find(name);
     return it != dict.end() && it->second.output_creator;
+}
+
+bool FormatFactory::checkIfFormatHasSchemaReader(const String & name)
+{
+    const auto & target = getCreators(name);
+    return bool(target.schema_reader_creator);
+}
+
+bool FormatFactory::checkIfFormatHasExternalSchemaReader(const String & name)
+{
+    const auto & target = getCreators(name);
+    return bool(target.external_schema_reader_creator);
+}
+
+bool FormatFactory::checkIfFormatHasAnySchemaReader(const String & name)
+{
+    return checkIfFormatHasSchemaReader(name) || checkIfFormatHasExternalSchemaReader(name);
 }
 
 FormatFactory & FormatFactory::instance()

@@ -12,7 +12,7 @@ namespace DB
 
 class Context;
 
-/* hdfs(name_node_ip:name_node_port, format, structure) - creates a temporary storage from hdfs file
+/* hdfs(name_node_ip:name_node_port, format[, structure]) - creates a temporary storage from hdfs file
  *
  */
 class TableFunctionHDFS : public ITableFunctionFileLike

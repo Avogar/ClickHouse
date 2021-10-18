@@ -6,6 +6,7 @@
 #if USE_MSGPACK
 
 #include <Processors/Formats/IRowInputFormat.h>
+#include <Processors/Formats/ISchemaReader.h>
 #include <Formats/FormatFactory.h>
 #include <IO/PeekableReadBuffer.h>
 #include <msgpack.hpp>
@@ -70,6 +71,20 @@ private:
     MsgPackVisitor visitor;
     msgpack::detail::parse_helper<MsgPackVisitor> parser;
     const DataTypes data_types;
+};
+
+class MsgPackNamesAndTypesReader : public ISchemaReader
+{
+public:
+    MsgPackNamesAndTypesReader(const FormatSettings & format_settings_);
+    NamesAndTypesList readSchema(ReadBuffer & in) const override;
+
+private:
+    msgpack::object_handle readObject(PeekableReadBuffer & buf) const;
+    DataTypePtr getDataType(const msgpack::object & object) const;
+
+    UInt64 number_of_columns;
+    UInt64 max_depth_for_structure_determination;
 };
 
 }

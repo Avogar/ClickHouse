@@ -312,6 +312,11 @@ static std::pair<bool, size_t> fileSegmentationEngineCSVImpl(ReadBuffer & in, DB
     return {loadAtPosition(in, memory, pos), number_of_rows};
 }
 
+//NamesAndTypesList CSVSchemaReader::readSchema(ReadBuffer & in) const
+//{
+//
+//}
+
 void registerFileSegmentationEngineCSV(FormatFactory & factory)
 {
     auto register_func = [&](const String & format_name, bool with_names, bool with_types)

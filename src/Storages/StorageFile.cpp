@@ -15,6 +15,7 @@
 #include <IO/WriteHelpers.h>
 
 #include <Formats/FormatFactory.h>
+#include <Formats/readSchemaFromFormat.h>
 #include <DataTypes/DataTypeString.h>
 #include <Processors/Sinks/SinkToStorage.h>
 #include <Processors/Transforms/AddingDefaultsTransform.h>
@@ -36,6 +37,7 @@
 #include <Processors/Sources/SourceWithProgress.h>
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Formats/IInputFormat.h>
+#include <Processors/Formats/ISchemaReader.h>
 #include <Processors/Sources/NullSource.h>
 #include <QueryPipeline/Pipe.h>
 #include <Processors/Executors/PullingPipelineExecutor.h>
@@ -60,6 +62,7 @@ namespace ErrorCodes
     extern const int TIMEOUT_EXCEEDED;
     extern const int INCOMPATIBLE_COLUMNS;
     extern const int CANNOT_STAT;
+    extern const int CANNOT_EXTRACT_TABLE_STRUCTURE;
 }
 
 namespace
@@ -131,6 +134,57 @@ void checkCreationIsAllowed(ContextPtr context_global, const std::string & db_di
     if (fs::exists(table_path) && fs::is_directory(table_path))
         throw Exception("File must not be a directory", ErrorCodes::INCORRECT_FILE_NAME);
 }
+
+std::unique_ptr<ReadBuffer> createReadBuffer(
+    const String & current_path,
+    bool use_table_fd,
+    const String & storage_name,
+    int table_fd,
+    const String & compression_method,
+    ContextPtr context)
+{
+    std::unique_ptr<ReadBuffer> nested_buffer;
+    CompressionMethod method;
+
+    struct stat file_stat{};
+
+    if (use_table_fd)
+    {
+        /// Check if file descriptor allows random reads (and reading it twice).
+        if (0 != fstat(table_fd, &file_stat))
+            throwFromErrno("Cannot stat table file descriptor, inside " + storage_name, ErrorCodes::CANNOT_STAT);
+
+        if (S_ISREG(file_stat.st_mode))
+            nested_buffer = std::make_unique<ReadBufferFromFileDescriptorPRead>(table_fd);
+        else
+            nested_buffer = std::make_unique<ReadBufferFromFileDescriptor>(table_fd);
+
+        method = chooseCompressionMethod("", compression_method);
+    }
+    else
+    {
+        /// Check if file descriptor allows random reads (and reading it twice).
+        if (0 != stat(current_path.c_str(), &file_stat))
+            throwFromErrno("Cannot stat file " + current_path, ErrorCodes::CANNOT_STAT);
+
+        if (S_ISREG(file_stat.st_mode))
+            nested_buffer = std::make_unique<ReadBufferFromFilePRead>(current_path, context->getSettingsRef().max_read_buffer_size);
+        else
+            nested_buffer = std::make_unique<ReadBufferFromFile>(current_path, context->getSettingsRef().max_read_buffer_size);
+
+        method = chooseCompressionMethod(current_path, compression_method);
+    }
+
+    /// For clickhouse-local add progress callback to display progress bar.
+    if (context->getApplicationType() == Context::ApplicationType::LOCAL)
+    {
+        auto & in = static_cast<ReadBufferFromFileDescriptor &>(*nested_buffer);
+        in.setProgressCallback(context);
+    }
+
+    return wrapReadBufferWithCompressionMethod(std::move(nested_buffer), method);
+}
+
 }
 
 Strings StorageFile::getPathsList(const String & table_path, const String & user_files_path, ContextPtr context, size_t & total_bytes_to_read)
@@ -190,22 +244,7 @@ StorageFile::StorageFile(const std::string & table_path_, const std::string & us
 {
     is_db_table = false;
     paths = getPathsList(table_path_, user_files_path, args.getContext(), total_bytes_to_read);
-
-    if (args.format_name == "Distributed")
-    {
-        if (paths.empty())
-            throw Exception("Cannot get table structure from file, because no files match specified name", ErrorCodes::INCORRECT_FILE_NAME);
-
-        auto & first_path = paths[0];
-        Block header = StorageDistributedDirectoryMonitor::createSourceFromFile(first_path)->getOutputs().front().getHeader();
-
-        StorageInMemoryMetadata storage_metadata;
-        auto columns = ColumnsDescription(header.getNamesAndTypesList());
-        if (!args.columns.empty() && columns != args.columns)
-            throw Exception("Table structure and file structure are different", ErrorCodes::INCOMPATIBLE_COLUMNS);
-        storage_metadata.setColumns(columns);
-        setInMemoryMetadata(storage_metadata);
-    }
+    setStorageMetadata(args);
 }
 
 StorageFile::StorageFile(const std::string & relative_table_dir_path, CommonArguments args)
@@ -221,18 +260,55 @@ StorageFile::StorageFile(const std::string & relative_table_dir_path, CommonArgu
     paths = {getTablePath(table_dir_path, format_name)};
     if (fs::exists(paths[0]))
         total_bytes_to_read = fs::file_size(paths[0]);
+
+    setStorageMetadata(args);
 }
 
 StorageFile::StorageFile(CommonArguments args)
     : IStorage(args.table_id)
     , format_name(args.format_name)
-    , format_header(args.format_header)
     , format_settings(args.format_settings)
     , compression_method(args.compression_method)
     , base_path(args.getContext()->getPath())
 {
+    LOG_DEBUG(&Poco::Logger::get("StorageFile"), "Construct");
+}
+
+void StorageFile::setStorageMetadata(CommonArguments args)
+{
     StorageInMemoryMetadata storage_metadata;
-    if (args.format_name != "Distributed")
+
+    if (args.format_name == "Distributed")
+    {
+        if (paths.empty())
+            throw Exception("Cannot get table structure from file, because no files match specified name", ErrorCodes::INCORRECT_FILE_NAME);
+
+        auto & first_path = paths[0];
+        Block header = StorageDistributedDirectoryMonitor::createSourceFromFile(first_path)->getOutputs().front().getHeader();
+
+        auto columns = ColumnsDescription(header.getNamesAndTypesList());
+        if (!args.columns.empty() && columns != args.columns)
+            throw Exception("Table structure and file structure are different", ErrorCodes::INCOMPATIBLE_COLUMNS);
+        storage_metadata.setColumns(columns);
+    }
+    else if (args.columns.empty())
+    {
+        auto read_buffer_creator = [this, context = args.getContext()]()
+        {
+            if (!use_table_fd && (paths.empty() || !fs::exists(paths[0])))
+                throw Exception(
+                    ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE,
+                    "Cannot extract table structure from {} format file, because there are no files with provided path. You must specify "
+                    "table structure manually",
+                    format_name);
+
+            return createReadBuffer(paths.empty() ? "" : paths[0], use_table_fd, getName(), table_fd, compression_method, context);
+        };
+
+        ColumnsDescription columns = readSchemaFromFormat(format_name, format_settings, read_buffer_creator, args.getContext());
+        storage_metadata.setColumns(columns);
+    }
+    else
         storage_metadata.setColumns(args.columns);
 
     storage_metadata.setConstraints(args.constraints);
@@ -297,7 +373,6 @@ public:
 
     StorageFileSource(
         std::shared_ptr<StorageFile> storage_,
-        std::optional<IInputFormatHeader> format_header_,
         const StorageMetadataPtr & metadata_snapshot_,
         ContextPtr context_,
         UInt64 max_block_size_,
@@ -305,7 +380,6 @@ public:
         ColumnsDescription columns_description_)
         : SourceWithProgress(getBlockForSource(storage_, metadata_snapshot_, columns_description_, files_info_))
         , storage(std::move(storage_))
-        , format_header(format_header_)
         , metadata_snapshot(metadata_snapshot_)
         , files_info(std::move(files_info_))
         , columns_description(std::move(columns_description_))
@@ -318,17 +392,6 @@ public:
             if (!shared_lock)
                 throw Exception("Lock timeout exceeded", ErrorCodes::TIMEOUT_EXCEEDED);
         }
-    }
-
-    StorageFileSource(
-        std::shared_ptr<StorageFile> storage_,
-        const StorageMetadataPtr & metadata_snapshot_,
-        ContextPtr context_,
-        UInt64 max_block_size_,
-        FilesInfoPtr files_info_,
-        ColumnsDescription columns_description_)
-        : StorageFileSource(storage_, {}, metadata_snapshot_, context_, max_block_size_, files_info_, columns_description_)
-    {
     }
 
     String getName() const override
@@ -360,46 +423,7 @@ public:
                     }
                 }
 
-                std::unique_ptr<ReadBuffer> nested_buffer;
-                CompressionMethod method;
-
-                struct stat file_stat{};
-
-                if (storage->use_table_fd)
-                {
-                    /// Check if file descriptor allows random reads (and reading it twice).
-                    if (0 != fstat(storage->table_fd, &file_stat))
-                        throwFromErrno("Cannot stat table file descriptor, inside " + storage->getName(), ErrorCodes::CANNOT_STAT);
-
-                    if (S_ISREG(file_stat.st_mode))
-                        nested_buffer = std::make_unique<ReadBufferFromFileDescriptorPRead>(storage->table_fd);
-                    else
-                        nested_buffer = std::make_unique<ReadBufferFromFileDescriptor>(storage->table_fd);
-
-                    method = chooseCompressionMethod("", storage->compression_method);
-                }
-                else
-                {
-                    /// Check if file descriptor allows random reads (and reading it twice).
-                    if (0 != stat(current_path.c_str(), &file_stat))
-                        throwFromErrno("Cannot stat file " + current_path, ErrorCodes::CANNOT_STAT);
-
-                    if (S_ISREG(file_stat.st_mode))
-                        nested_buffer = std::make_unique<ReadBufferFromFilePRead>(current_path, context->getSettingsRef().max_read_buffer_size);
-                    else
-                        nested_buffer = std::make_unique<ReadBufferFromFile>(current_path, context->getSettingsRef().max_read_buffer_size);
-
-                    method = chooseCompressionMethod(current_path, storage->compression_method);
-                }
-
-                /// For clickhouse-local add progress callback to display progress bar.
-                if (context->getApplicationType() == Context::ApplicationType::LOCAL)
-                {
-                    auto & in = static_cast<ReadBufferFromFileDescriptor &>(*nested_buffer);
-                    in.setProgressCallback(context);
-                }
-
-                read_buf = wrapReadBufferWithCompressionMethod(std::move(nested_buffer), method);
+                read_buf = createReadBuffer(current_path, storage->use_table_fd, storage->getName(), storage->table_fd, storage->compression_method, context);
 
                 auto get_block_for_format = [&]() -> Block
                 {
@@ -422,7 +446,9 @@ public:
                     });
                 }
 
-                reader->readPrefix();
+                pipeline = std::make_unique<QueryPipeline>(QueryPipelineBuilder::getPipeline(std::move(builder)));
+
+                reader = std::make_unique<PullingPipelineExecutor>(*pipeline);
             }
 
             Chunk chunk;
@@ -466,7 +492,6 @@ public:
 
 private:
     std::shared_ptr<StorageFile> storage;
-    std::optional<IInputFormatHeader> format_header;
     StorageMetadataPtr metadata_snapshot;
     FilesInfoPtr files_info;
     String current_path;
@@ -718,7 +743,7 @@ void registerStorageFile(StorageFactory & factory)
     StorageFactory::StorageFeatures storage_features{
         .supports_settings = true,
         .supports_schema_inference = true,
-        .source_access_type = AccessType::FILE
+        .source_access_type = AccessType::FILE,
     };
 
     factory.registerStorage(
@@ -732,10 +757,9 @@ void registerStorageFile(StorageFactory & factory)
                 {},
                 {},
                 {},
-                {},
                 factory_args.columns,
                 factory_args.constraints,
-                factory_args.comment
+                factory_args.comment,
             };
 
             ASTs & engine_args_ast = factory_args.engine_args;
@@ -819,46 +843,7 @@ void registerStorageFile(StorageFactory & factory)
             else
                 storage_args.compression_method = "auto";
 
-            bool use_table_fd = 0 <= source_fd;
-
-            // Guess the table schema if it's required. In the future, we must pass a flag (smth like
-            // 'is_schema_provided') to determine whether the schema inference should be used.
-            if (factory_args.columns.empty())
-            {
-                std::unique_ptr<ReadBuffer> nested_buffer;
-                CompressionMethod method;
-
-                if (use_table_fd)
-                {
-                    nested_buffer = std::make_unique<ReadBufferFromFileDescriptor>(source_fd);
-                    method = chooseCompressionMethod("", storage_args.compression_method);
-                }
-                else
-                {
-                    auto paths = StorageFile::getPathsList(source_path, factory_args.getContext()->getUserFilesPath(), storage_args.getContext());
-                    String first_path = paths[0];
-                    nested_buffer = std::make_unique<ReadBufferFromFile>(first_path);
-                    method = chooseCompressionMethod(first_path, storage_args.compression_method);
-                }
-                // TODO: think how to use read buffer creation from StorageFile here.
-
-                auto read_buf = wrapReadBufferWithCompressionMethod(std::move(nested_buffer), method);
-                
-                FormatFactory & format_factory = FormatFactory::instance();
-                if (!format_factory.checkIfInputFormatSupportsFormatHeader(storage_args.format_name))
-                    throw Exception("InputFormat " + storage_args.format_name + " doesn't support schema inference", 
-                                    ErrorCodes::LOGICAL_ERROR);
-
-                auto format_header = format_factory.getInputFormatHeader(
-                    storage_args.format_name, *read_buf, storage_args.getContext(), 0, storage_args.format_settings);
-
-                format_header->readPrefix();
-                Block sample_block = format_header->getHeader();
-                storage_args.columns = ColumnsDescription(sample_block.getNamesAndTypesList());
-                storage_args.format_header.emplace(*format_header);
-            }
-
-            if (use_table_fd) /// File descriptor
+            if (0 <= source_fd) /// File descriptor
                 return StorageFile::create(source_fd, storage_args);
             else /// User's file
                 return StorageFile::create(source_path, factory_args.getContext()->getUserFilesPath(), storage_args);
