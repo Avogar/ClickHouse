@@ -92,6 +92,80 @@ static std::pair<bool, size_t> fileSegmentationEngineJSONEachRowImpl(ReadBuffer 
     return {loadAtPosition(in, memory, pos), number_of_rows};
 }
 
+template <const char opening_bracket, const char closing_bracket>
+static String readJSONEachRowLineIntoStringImpl(ReadBuffer & in)
+{
+    skipWhitespaceIfAny(in);
+    if (in.eof())
+        throw Exception(ErrorCodes::INCORRECT_DATA, "Cannot read JSON object: unexpected end of file");
+
+    if (!checkChar(opening_bracket, in))
+        throw Exception(ErrorCodes::INCORRECT_DATA, "Cannot read JSONEachRow line: {} expected, {} got", opening_bracket, *in.position());
+
+    Memory memory;
+    size_t balance = 1;
+    bool quotes = false;
+    char * pos = in.position();
+    while (loadAtPosition(in, memory, pos) && balance)
+    {
+        if (quotes)
+        {
+            pos = find_first_symbols<'\\', '"'>(pos, in.buffer().end());
+
+            if (pos == in.buffer().end())
+                continue;
+
+            if (*pos == '\\')
+            {
+                ++pos;
+                if (loadAtPosition(in, memory, pos))
+                    ++pos;
+            }
+            else if (*pos == '"')
+            {
+                ++pos;
+                quotes = false;
+            }
+        }
+        else
+        {
+            pos = find_first_symbols<opening_bracket, closing_bracket, '\\', '"'>(pos, in.buffer().end());
+
+            if (pos == in.buffer().end())
+                continue;
+
+            else if (*pos == opening_bracket)
+            {
+                ++balance;
+                ++pos;
+            }
+            else if (*pos == closing_bracket)
+            {
+                --balance;
+                ++pos;
+            }
+            else if (*pos == '\\')
+            {
+                ++pos;
+                if (loadAtPosition(in, memory, pos))
+                    ++pos;
+            }
+            else if (*pos == '"')
+            {
+                quotes = true;
+                ++pos;
+            }
+        }
+    }
+
+    if (balance)
+        throw Exception(ErrorCodes::INCORRECT_DATA, "Cannot read JSON object: unexpected end of file");
+
+    saveUpToPosition(in, memory, pos);
+    return String(memory.data(), memory.size());
+}
+
+
 std::pair<bool, size_t> fileSegmentationEngineJSONEachRow(ReadBuffer & in, DB::Memory<> & memory, size_t min_chunk_size)
 {
     return fileSegmentationEngineJSONEachRowImpl<'{', '}'>(in, memory, min_chunk_size, 1);
@@ -100,6 +174,21 @@ std::pair<bool, size_t> fileSegmentationEngineJSONEachRow(ReadBuffer & in, DB::M
 std::pair<bool, size_t> fileSegmentationEngineJSONCompactEachRow(ReadBuffer & in, DB::Memory<> & memory, size_t min_chunk_size, size_t min_rows)
 {
     return fileSegmentationEngineJSONEachRowImpl<'[', ']'>(in, memory, min_chunk_size, min_rows);
+}
+
+String readJSONCompactEachRowLineIntoString(ReadBuffer & in)
+{
+    return readJSONEachRowLineIntoStringImpl<'[', ']'>(in);
+}
+
+String readJSONEachRowLineIntoString(ReadBuffer & in)
+{
+    return readJSONEachRowLineIntoStringImpl<'{', '}'>(in);
+}
+
+DataTypePtr getDataTypeFromJSONField(Poco::Dynamic::Var & field)
+{
+//    Poco::Dynamic::t
 }
 
 bool nonTrivialPrefixAndSuffixCheckerJSONEachRowImpl(ReadBuffer & buf)

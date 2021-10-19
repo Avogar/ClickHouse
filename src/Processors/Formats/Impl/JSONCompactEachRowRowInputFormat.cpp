@@ -1,6 +1,7 @@
 #include <Processors/Formats/Impl/JSONCompactEachRowRowInputFormat.h>
 
 #include <IO/ReadHelpers.h>
+#include <IO/PeekableReadBuffer.h>
 #include <IO/Operators.h>
 #include <Formats/FormatFactory.h>
 #include <Formats/verbosePrintString.h>
@@ -11,6 +12,7 @@
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
+#include <Poco/JSON/Parser.h>
 
 namespace DB
 {
@@ -30,15 +32,39 @@ JSONCompactEachRowRowInputFormat::JSONCompactEachRowRowInputFormat(
     bool with_types_,
     bool yield_strings_,
     const FormatSettings & format_settings_)
-    : RowInputFormatWithNamesAndTypes(header_, in_, std::move(params_), with_names_, with_types_, format_settings_)
+    : RowInputFormatWithNamesAndTypes(
+        header_,
+        in_,
+        std::move(params_),
+        with_names_,
+        with_types_,
+        format_settings_,
+        std::make_unique<JSONCompactEachRowRowSchemaReader>(with_names_, with_types_, yield_strings_))
     , yield_strings(yield_strings_)
 {
 }
 
+static void skipJSONCompactRowStartDelimiter(ReadBuffer & in)
+{
+    skipWhitespaceIfAny(in);
+    assertChar('[', in);
+}
+
+static void skipJSONCompactRowEndDelimiter(ReadBuffer & in)
+{
+    skipWhitespaceIfAny(in);
+    assertChar(']', in);
+
+    skipWhitespaceIfAny(in);
+    if (!in.eof() && (*in.position() == ',' || *in.position() == ';'))
+        ++in.position();
+
+    skipWhitespaceIfAny(in);
+}
+
 void JSONCompactEachRowRowInputFormat::skipRowStartDelimiter()
 {
-    skipWhitespaceIfAny(*in);
-    assertChar('[', *in);
+    skipJSONCompactRowStartDelimiter(*in);
 }
 
 void JSONCompactEachRowRowInputFormat::skipFieldDelimiter()
@@ -49,22 +75,7 @@ void JSONCompactEachRowRowInputFormat::skipFieldDelimiter()
 
 void JSONCompactEachRowRowInputFormat::skipRowEndDelimiter()
 {
-    skipWhitespaceIfAny(*in);
-    assertChar(']', *in);
-
-    skipWhitespaceIfAny(*in);
-    if (!in->eof() && (*in->position() == ',' || *in->position() == ';'))
-        ++in->position();
-
-    skipWhitespaceIfAny(*in);
-}
-
-String JSONCompactEachRowRowInputFormat::readFieldIntoString()
-{
-    skipWhitespaceIfAny(*in);
-    String field;
-    readJSONString(field, *in);
-    return field;
+    skipJSONCompactRowEndDelimiter(*in);
 }
 
 void JSONCompactEachRowRowInputFormat::skipField(size_t file_column)
@@ -87,21 +98,6 @@ void JSONCompactEachRowRowInputFormat::skipHeaderRow()
     while (checkChar(',', *in));
 
     skipRowEndDelimiter();
-}
-
-std::vector<String> JSONCompactEachRowRowInputFormat::readHeaderRow()
-{
-    skipRowStartDelimiter();
-    std::vector<String> fields;
-    do
-    {
-        fields.push_back(readFieldIntoString());
-        skipWhitespaceIfAny(*in);
-    }
-    while (checkChar(',', *in));
-
-    skipRowEndDelimiter();
-    return fields;
 }
 
 bool JSONCompactEachRowRowInputFormat::readField(IColumn & column, const DataTypePtr & type, const SerializationPtr & serialization, bool /*is_last_file_column*/, const String & column_name)
@@ -184,16 +180,16 @@ bool JSONCompactEachRowRowInputFormat::parseRowEndWithDiagnosticInfo(WriteBuffer
     return true;
 }
 
-JSONCompactEachRowRowSchemaReader::JSONCompactEachRowRowSchemaReader(bool with_names_, bool with_types_)
-    : with_names(with_names_), with_types(with_types_)
+JSONCompactEachRowRowSchemaReader::JSONCompactEachRowRowSchemaReader(bool with_names_, bool with_types_, bool yield_strings_)
+    : FormatWithNamesAndTypesSchemaReader(with_names_, with_types_), yield_strings(yield_strings_)
 {
 }
 
-std::vector<String> JSONCompactEachRowRowSchemaReader::readLine(ReadBuffer & in) const
+std::vector<String> JSONCompactEachRowRowSchemaReader::readRow(ReadBuffer & in) const
 {
+    skipJSONCompactRowStartDelimiter(in);
     std::vector<String> fields;
     String field;
-    assertChar('[', in);
     do
     {
         skipWhitespaceIfAny(in);
@@ -202,47 +198,30 @@ std::vector<String> JSONCompactEachRowRowSchemaReader::readLine(ReadBuffer & in)
         skipWhitespaceIfAny(in);
     }
     while (checkChar(',', in));
-    assertChar(']', in);
-    skipEndOfLine(in);
+
+    skipJSONCompactRowEndDelimiter(in);
     return fields;
-}
-
-NamesAndTypesList JSONCompactEachRowRowSchemaReader::readSchema(ReadBuffer & in) const
-{
-    skipBOMIfExists(in);
-
-    Names column_names;
-    if (with_names)
-        column_names = readColumnNames(in);
-
-    DataTypes data_types = readColumnDataTypes(in);
-    if (column_names.empty())
-        column_names = generateDefaultColumnNames(data_types.size());
-
-    return NamesAndTypesList::createFromNamesAndTypes(column_names, data_types);
 }
 
 Names JSONCompactEachRowRowSchemaReader::readColumnNames(ReadBuffer & in) const
 {
-    return readLine(in);
+    return readRow(in);
 }
 
-DataTypes JSONCompactEachRowRowSchemaReader::readColumnDataTypes(ReadBuffer & in) const
+Names JSONCompactEachRowRowSchemaReader::readDataTypeNames(ReadBuffer & in) const
 {
-    DataTypes data_types;
-    if (with_types)
-    {
-        std::vector<String> type_names = readLine(in);
-        data_types.reserve(type_names.size());
-        for (const auto & type_name : type_names)
-            data_types.push_back(DataTypeFactory::instance().get(type_name));
-    }
-    else
-    {
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not implemented");
-    }
+    return readRow(in);
+}
 
-    return data_types;
+DataTypes JSONCompactEachRowRowSchemaReader::determineTypesFromData(ReadBuffer & in) const
+{
+    String line = readJSONCompactEachRowLineIntoString(in);
+    Poco::JSON::Parser parser;
+    auto var = parser.parse(line);
+    if (!var.isList())
+        throw Exception{ErrorCodes::INCORRECT_DATA, "JSONCompact row is not a JSON list"};
+
+    Poco::JSON::Array::Ptr array = var.extract<Poco::JSON::Array::Ptr>();
 }
 
 void registerInputFormatJSONCompactEachRow(FormatFactory & factory)

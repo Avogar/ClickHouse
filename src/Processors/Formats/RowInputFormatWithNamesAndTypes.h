@@ -1,11 +1,13 @@
 #pragma once
 
 #include <Processors/Formats/RowInputFormatWithDiagnosticInfo.h>
+#include <Processors/Formats/ISchemaReader.h>
 #include <Formats/FormatSettings.h>
 #include <Formats/FormatFactory.h>
 
 namespace DB
 {
+class FormatWithNamesAndTypesSchemaReader;
 
 /// Base class for input formats with -WithNames and -WithNamesAndTypes suffixes.
 /// It accepts 2 parameters in constructor - with_names and with_types and implements
@@ -28,7 +30,10 @@ public:
         const Block & header_,
         ReadBuffer & in_,
         const Params & params_,
-        bool with_names_, bool with_types_, const FormatSettings & format_settings_);
+        bool with_names_,
+        bool with_types_,
+        const FormatSettings & format_settings_,
+        std::unique_ptr<FormatWithNamesAndTypesSchemaReader> schema_reader_);
 
     bool readRow(MutableColumns & columns, RowReadExtension & ext) override;
     void readPrefix() override;
@@ -58,11 +63,6 @@ protected:
     virtual bool parseRowEndWithDiagnosticInfo(WriteBuffer &) { return true;}
     bool isGarbageAfterField(size_t, ReadBuffer::Position) override {return false; }
 
-    /// Read row with names and return the list of them.
-    virtual std::vector<String> readNames() = 0;
-    /// Read row with types and return the list of them.
-    virtual std::vector<String> readTypes() = 0;
-
     const FormatSettings format_settings;
     DataTypes data_types;
 
@@ -77,9 +77,24 @@ private:
     bool with_names;
     bool with_types;
     std::unordered_map<String, size_t> column_indexes_by_names;
+    std::unique_ptr<FormatWithNamesAndTypesSchemaReader> schema_reader;
 };
 
-void registerFileSegmentationEngineForFormatWithNamesAndTypes(
-    FormatFactory & factory, const String & base_format_name, FormatFactory::FileSegmentationEngine segmentation_engine);
+class FormatWithNamesAndTypesSchemaReader : public ISchemaReader
+{
+public:
+    FormatWithNamesAndTypesSchemaReader(bool with_names_, bool with_types_);
+
+    NamesAndTypesList readSchema(ReadBuffer & in) const override;
+    virtual Names readColumnNames(ReadBuffer & in) const = 0;
+    virtual Names readDataTypeNames(ReadBuffer & in) const = 0;
+
+private:
+    DataTypes readDataTypes(ReadBuffer & in) const;
+    virtual DataTypes determineTypesFromData(ReadBuffer & in) const = 0;
+    bool with_names;
+    bool with_types;
+};
 
 }
+

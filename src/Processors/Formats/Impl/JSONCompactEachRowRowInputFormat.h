@@ -55,26 +55,23 @@ private:
     void skipFieldDelimiter() override;
     void skipRowEndDelimiter() override;
 
-    std::vector<String> readHeaderRow();
-    std::vector<String> readNames() override { return readHeaderRow(); }
-    std::vector<String> readTypes() override { return readHeaderRow(); }
-    String readFieldIntoString();
+    bool yield_strings;
 };
 
-class JSONCompactEachRowRowSchemaReader : public ISchemaReader
+class JSONCompactEachRowRowSchemaReader : public FormatWithNamesAndTypesSchemaReader
 {
 public:
-    JSONCompactEachRowRowSchemaReader(bool with_names_, bool with_types_);
+    JSONCompactEachRowRowSchemaReader(bool with_names_, bool with_types_, bool yield_strings_);
 
-    NamesAndTypesList readSchema(ReadBuffer & in) const override;
-    Names readColumnNames(ReadBuffer & in) const;
-    DataTypes readColumnDataTypes(ReadBuffer & in) const;
+    Names readColumnNames(ReadBuffer & in) const override;
+    Names readDataTypeNames(ReadBuffer & in) const override;
 
 private:
-    std::vector<String> readLine(ReadBuffer & in) const;
+    DataTypes determineTypesFromData(ReadBuffer & in) const override;
 
-    bool with_names;
-    bool with_types;
+    std::vector<std::string> readRow(ReadBuffer & in) const;
+
+    bool yield_strings;
 };
 
 }

@@ -10,31 +10,23 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Parsers/ASTLiteral.h>
-#include <IO/ReadHelpers.h>
-#include <Storages/HDFS/ReadBufferFromHDFS.h>
-#include <Storages/HDFS/WriteBufferFromHDFS.h>
-#include <IO/WriteHelpers.h>
-#include <Storages/HDFS/HDFSCommon.h>
-#include <Formats/FormatFactory.h>
+#include <Processors/Executors/PullingPipelineExecutor.h>
+#include <Processors/Formats/IInputFormat.h>
 #include <Processors/Formats/IOutputFormat.h>
-#include <DataTypes/DataTypeString.h>
 #include <Processors/Sinks/SinkToStorage.h>
 #include <Processors/Sources/SourceWithProgress.h>
+#include <QueryPipeline/Pipe.h>
+#include <QueryPipeline/QueryPipeline.h>
 #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/HDFS/ReadBufferFromHDFS.h>
 #include <Storages/HDFS/StorageHDFS.h>
 #include <Storages/HDFS/WriteBufferFromHDFS.h>
 #include <Storages/StorageFactory.h>
+#include <Common/parseGlobs.h>
+#include <Poco/URI.h>
 #include <hdfs/hdfs.h>
 #include <re2/re2.h>
 #include <re2/stringpiece.h>
-#include <hdfs/hdfs.h>
-#include <Processors/Sources/SourceWithProgress.h>
-#include <Processors/Executors/PullingPipelineExecutor.h>
-#include <Processors/Formats/IInputFormat.h>
-#include <QueryPipeline/QueryPipeline.h>
-#include <QueryPipeline/Pipe.h>
-#include <filesystem>
 
 
 namespace fs = std::filesystem;

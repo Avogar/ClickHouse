@@ -39,11 +39,6 @@ private:
     void skipFieldDelimiter() override;
     void skipRowEndDelimiter() override;
 
-    std::vector<String> readHeaderRow();
-    std::vector<String> readNames() override { return readHeaderRow(); }
-    std::vector<String> readTypes() override { return readHeaderRow(); }
-    String readFieldIntoString();
-
     void checkNullValueForNonNullable(DataTypePtr type) override;
 
     bool parseFieldDelimiterWithDiagnosticInfo(WriteBuffer & out) override;
@@ -51,21 +46,21 @@ private:
     bool isGarbageAfterField(size_t, ReadBuffer::Position pos) override { return *pos != '\n' && *pos != '\t'; }
 };
 
-class TabSeparatedSchemaReader : public ISchemaReader
+class TabSeparatedSchemaReader : public FormatWithNamesAndTypesSchemaReader
 {
 public:
-    TabSeparatedSchemaReader(bool with_names_, bool with_types_, bool tsv_raw_);
+    TabSeparatedSchemaReader(bool with_names_, bool with_types_, bool is_raw_);
 
-    NamesAndTypesList readSchema(ReadBuffer & in) const override;
-
-    Names readColumnNames(ReadBuffer & in) const;
-    DataTypes readColumnDataTypes(ReadBuffer & in) const;
+    Names readColumnNames(ReadBuffer & in) const override;
+    Names readDataTypeNames(ReadBuffer & in) const override;
 
 private:
-    std::vector<std::string> readLine(ReadBuffer & in) const;
+    DataTypes determineTypesFromData(ReadBuffer & in) const override;
+
+    std::vector<std::string> readRow(ReadBuffer & in) const;
     bool with_names;
     bool with_types;
-    bool tsv_raw;
+    bool is_raw;
 };
 
 }

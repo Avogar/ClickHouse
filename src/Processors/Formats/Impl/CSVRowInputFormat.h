@@ -47,21 +47,21 @@ private:
     void skipTypes() override { skipHeaderRow(); }
     void skipFieldDelimiter() override;
     void skipRowEndDelimiter() override;
-
-    std::vector<String> readHeaderRow();
-    std::vector<String> readNames() override { return readHeaderRow(); }
-    std::vector<String> readTypes() override { return readHeaderRow(); }
-
-    String readFieldIntoString();
 };
 
-class CSVSchemaReader : public ISchemaReader
+class CSVSchemaReader : public FormatWithNamesAndTypesSchemaReader
 {
 public:
-    NamesAndTypesList readSchema(ReadBuffer & in) const override;
+    CSVSchemaReader(bool with_names_, bool with_types_, const FormatSettings & format_setting_);
+
+    Names readColumnNames(ReadBuffer & in) const override;
+    Names readDataTypeNames(ReadBuffer & in) const override;
 
 private:
-    bool with_names;
+    DataTypes determineTypesFromData(ReadBuffer & in) const override;
+    std::vector<std::string> readRow(ReadBuffer & in) const;
+
+    const FormatSettings format_settings;
 };
 
 }

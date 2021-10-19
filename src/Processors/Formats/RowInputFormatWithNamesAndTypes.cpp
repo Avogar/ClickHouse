@@ -1,5 +1,6 @@
 #include <Processors/Formats/RowInputFormatWithNamesAndTypes.h>
 #include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <IO/ReadHelpers.h>
 #include <IO/Operators.h>
 
@@ -9,6 +10,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int INCORRECT_DATA;
+    extern const int CANNOT_EXTRACT_TABLE_STRUCTURE;
 }
 
 RowInputFormatWithNamesAndTypes::RowInputFormatWithNamesAndTypes(
@@ -17,8 +19,13 @@ RowInputFormatWithNamesAndTypes::RowInputFormatWithNamesAndTypes(
     const Params & params_,
     bool with_names_,
     bool with_types_,
-    const FormatSettings & format_settings_)
-    : RowInputFormatWithDiagnosticInfo(header_, in_, params_), format_settings(format_settings_), with_names(with_names_), with_types(with_types_)
+    const FormatSettings & format_settings_,
+    std::unique_ptr<FormatWithNamesAndTypesSchemaReader> schema_reader_)
+    : RowInputFormatWithDiagnosticInfo(header_, in_, params_)
+    , format_settings(format_settings_)
+    , with_names(with_names_)
+    , with_types(with_types_)
+    , schema_reader(std::move(schema_reader_))
 {
     const auto & sample = getPort().getHeader();
     size_t num_columns = sample.columns();
@@ -89,7 +96,7 @@ void RowInputFormatWithNamesAndTypes::readPrefix()
         if (format_settings.with_names_use_header)
         {
             std::vector<bool> read_columns(data_types.size(), false);
-            auto column_names = readNames();
+            auto column_names = schema_reader->readColumnNames(*in);
             for (const auto & name : column_names)
                 addInputColumn(name, read_columns);
 
@@ -112,7 +119,7 @@ void RowInputFormatWithNamesAndTypes::readPrefix()
     {
         if (format_settings.with_types_use_header)
         {
-            auto types = readTypes();
+            auto types = schema_reader->readDataTypeNames(*in);
             if (types.size() != column_mapping->column_indexes_for_input_fields.size())
                 throw Exception(
                     ErrorCodes::INCORRECT_DATA,
@@ -247,14 +254,50 @@ bool RowInputFormatWithNamesAndTypes::parseRowAndPrintDiagnosticInfo(MutableColu
     return parseRowEndWithDiagnosticInfo(out);
 }
 
-
-void registerFileSegmentationEngineForFormatWithNamesAndTypes(
-    FormatFactory & factory, const String & base_format_name, FormatFactory::FileSegmentationEngine segmentation_engine)
+FormatWithNamesAndTypesSchemaReader::FormatWithNamesAndTypesSchemaReader(bool with_names_, bool with_types_)
+    : with_names(with_names_), with_types(with_types_)
 {
-    factory.registerFileSegmentationEngine(base_format_name, segmentation_engine);
-    factory.registerFileSegmentationEngine(base_format_name + "WithNames", segmentation_engine);
-    factory.registerFileSegmentationEngine(base_format_name + "WithNamesAndTypes", segmentation_engine);
 }
 
+NamesAndTypesList FormatWithNamesAndTypesSchemaReader::readSchema(ReadBuffer & in) const
+{
+    if (with_names || with_types)
+        skipBOMIfExists(in);
+
+    Names column_names;
+    if (with_names)
+    {
+        if (in.eof())
+            throw Exception{ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE, "Cannot read column names from data: unexpected end of file"};
+        column_names = readColumnNames(in);
+    }
+
+    DataTypes data_types = readDataTypes(in);
+    if (column_names.empty())
+        column_names = generateDefaultColumnNames(data_types.size());
+
+    return NamesAndTypesList::createFromNamesAndTypes(column_names, data_types);
+}
+
+DataTypes FormatWithNamesAndTypesSchemaReader::readDataTypes(ReadBuffer & in) const
+{
+    if (with_types)
+    {
+        if (in.eof())
+            throw Exception{ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE, "Cannot read column types from data: unexpected end of file"};
+        std::vector<String> data_type_names = readDataTypeNames(in);
+        DataTypes data_types;
+        data_types.reserve(data_type_names.size());
+        for (const auto & type_name : data_type_names)
+            data_types.push_back(DataTypeFactory::instance().get(type_name));
+        return data_types;
+    }
+
+    if (in.eof())
+        throw Exception{ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE, "Cannot determine column types from data: unexpected end of file"};
+
+    return determineTypesFromData(in);
+}
 
 }
+
