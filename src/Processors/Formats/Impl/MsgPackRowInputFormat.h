@@ -84,7 +84,7 @@ private:
     DataTypePtr getDataType(const msgpack::object & object) const;
 
     UInt64 number_of_columns;
-    UInt64 max_depth_for_structure_determination;
+    UInt64 max_depth_for_schema_inference;
 };
 
 }

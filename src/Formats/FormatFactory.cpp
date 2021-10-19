@@ -61,7 +61,6 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.csv.null_representation = settings.output_format_csv_null_representation;
     format_settings.csv.unquoted_null_literal_as_null = settings.input_format_csv_unquoted_null_literal_as_null;
     format_settings.csv.input_format_arrays_as_nested_csv = settings.input_format_csv_arrays_as_nested_csv;
-    format_settings.csv.check_types = settings.input_format_csv_check_types;
     format_settings.custom.escaping_rule = settings.format_custom_escaping_rule;
     format_settings.custom.field_delimiter = settings.format_custom_field_delimiter;
     format_settings.custom.result_after_delimiter = settings.format_custom_result_after_delimiter;
@@ -104,7 +103,6 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.tsv.empty_as_default = settings.input_format_tsv_empty_as_default;
     format_settings.tsv.input_format_enum_as_number = settings.input_format_tsv_enum_as_number;
     format_settings.tsv.null_representation = settings.output_format_tsv_null_representation;
-    format_settings.tsv.check_types = settings.input_format_tsv_check_types;
     format_settings.values.accurate_types_of_literals = settings.input_format_values_accurate_types_of_literals;
     format_settings.values.deduce_templates_of_expressions = settings.input_format_values_deduce_templates_of_expressions;
     format_settings.values.interpret_expressions = settings.input_format_values_interpret_expressions;
@@ -117,7 +115,7 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.defaults_for_omitted_fields = settings.input_format_defaults_for_omitted_fields;
     format_settings.capn_proto.enum_comparing_mode = settings.format_capn_proto_enum_comparising_mode;
     format_settings.msgpack.number_of_columns = settings.input_format_msgpack_number_of_columns;
-    format_settings.msgpack.max_depth_for_structure_determination = settings.input_format_msgpack_max_depth_for_structure_determination;
+    format_settings.max_depth_for_schema_inference = settings.input_format_max_depth_for_schema_inference;
 
     /// Validate avro_schema_registry_url with RemoteHostFilter when non-empty and in Server context
     if (format_settings.schema.is_server)

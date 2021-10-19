@@ -61,7 +61,7 @@ private:
     DataTypes determineTypesFromData(ReadBuffer & in) const override;
     std::vector<std::string> readRow(ReadBuffer & in) const;
 
-    const FormatSettings format_settings;
+    const FormatSettings::CSV csv_settings;
 };
 
 }

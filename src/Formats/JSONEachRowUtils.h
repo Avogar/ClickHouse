@@ -12,10 +12,12 @@ namespace DB
 std::pair<bool, size_t> fileSegmentationEngineJSONEachRow(ReadBuffer & in, DB::Memory<> & memory, size_t min_chunk_size);
 std::pair<bool, size_t> fileSegmentationEngineJSONCompactEachRow(ReadBuffer & in, DB::Memory<> & memory, size_t min_chunk_size, size_t min_rows);
 
-String readJSONCompactEachRowLineIntoString(ReadBuffer & in);
-String readJSONEachRowLineIntoString(ReadBuffer & in);
 
-DataTypePtr getDataTypeFromJSONField(Poco::Dynamic::Var & field);
+using JSONEachRowFieldExtractor = std::function<std::vector<Poco::Dynamic::Var>(const Poco::Dynamic::Var &)>;
+
+DataTypes determineColumnDataTypesFromJSONEachRowData(ReadBuffer & in, size_t max_depth, bool json_strings, JSONEachRowFieldExtractor extractor);
+DataTypes determineColumnDataTypesFromJSONCompactEachRowData(ReadBuffer & in, size_t max_depth, bool json_strings, JSONEachRowFieldExtractor extractor);
+
 
 bool nonTrivialPrefixAndSuffixCheckerJSONEachRowImpl(ReadBuffer & buf);
 

@@ -32,6 +32,8 @@ struct FormatSettings
     bool decimal_trailing_zeros = false;
     bool defaults_for_omitted_fields = true;
 
+    UInt64 max_depth_for_schema_inference = 5;
+
     enum class DateTimeInputFormat
     {
         Basic,      /// Default format for fast parsing: YYYY-MM-DD hh:mm:ss (ISO-8601 without fractional part and timezone) or NNNNNNNNNN unix timestamp.
@@ -79,7 +81,6 @@ struct FormatSettings
         bool input_format_enum_as_number = false;
         bool input_format_arrays_as_nested_csv = false;
         String null_representation = "\\N";
-        bool check_types = true;
     } csv;
 
     struct Custom
@@ -173,7 +174,6 @@ struct FormatSettings
         bool crlf_end_of_line = false;
         String null_representation = "\\N";
         bool input_format_enum_as_number = false;
-        bool check_types = true;
     } tsv;
 
     struct
@@ -205,7 +205,6 @@ struct FormatSettings
     struct
     {
         UInt64 number_of_columns = 0;
-        UInt64 max_depth_for_structure_determination = 0;
     } msgpack;
 };
 

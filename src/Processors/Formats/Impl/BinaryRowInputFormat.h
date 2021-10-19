@@ -33,23 +33,28 @@ private:
     void skipTypes() override;
     void skipHeaderRow();
 
-    std::vector<String> readNames() override;
-    std::vector<String> readTypes() override;
-    std::vector<String> readHeaderRow();
-
     /// Data types read from input data.
     DataTypes read_data_types;
-    UInt64 read_columns = 0;
+    UInt64 read_columns;
 };
 
-class BinaryWithNamesAndTypesSchemaReader : public ISchemaReader
+class BinaryWithNamesAndTypesSchemaReader : public FormatWithNamesAndTypesSchemaReader
 {
 public:
-    NamesAndTypesList readSchema(ReadBuffer & in) const override;
+    BinaryWithNamesAndTypesSchemaReader();
+
+    Names readColumnNames(ReadBuffer & in) const override;
+    Names readDataTypeNames(ReadBuffer & in) const override;
 
 private:
-    Names readColumnNames(ReadBuffer & in, UInt64 columns) const;
-    DataTypes readColumnDataTypes(ReadBuffer & in, UInt64 columns) const;
+    DataTypes determineTypesFromData(ReadBuffer &) const override
+    {
+        throw Exception{ErrorCodes::NOT_IMPLEMENTED, "Method determineTypesFromData is not implemented in BinaryWithNamesAndTypesSchemaReader"};
+    }
+
+    std::vector<std::string> readRow(ReadBuffer & in) const;
+
+    UInt64 read_columns;
 };
 
 }

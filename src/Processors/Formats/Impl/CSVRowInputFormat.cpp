@@ -11,6 +11,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 
+
 namespace DB
 {
 namespace ErrorCodes
@@ -19,6 +20,7 @@ namespace ErrorCodes
     extern const int INCORRECT_DATA;
     extern const int LOGICAL_ERROR;
 }
+
 
 CSVRowInputFormat::CSVRowInputFormat(
     const Block & header_,
@@ -43,6 +45,7 @@ CSVRowInputFormat::CSVRowInputFormat(
                 + "'. Try use CustomSeparated format instead.",
             ErrorCodes::BAD_ARGUMENTS);
 }
+
 
 static void skipEndOfLine(ReadBuffer & in)
 {
@@ -233,6 +236,7 @@ bool CSVRowInputFormat::readField(
     }
 }
 
+
 void registerInputFormatCSV(FormatFactory & factory)
 {
     auto register_func = [&](const String & format_name, bool with_names, bool with_types)
@@ -315,7 +319,7 @@ static std::pair<bool, size_t> fileSegmentationEngineCSVImpl(ReadBuffer & in, DB
 }
 
 CSVSchemaReader::CSVSchemaReader(bool with_names_, bool with_types_, const FormatSettings & format_setting_)
-    : FormatWithNamesAndTypesSchemaReader(with_names_, with_types_), format_settings(format_setting_)
+    : FormatWithNamesAndTypesSchemaReader(with_names_, with_types_), csv_settings(format_setting_.csv)
 {
 }
 
@@ -324,11 +328,11 @@ std::vector<std::string> CSVSchemaReader::readRow(ReadBuffer & in) const
     std::vector<String> fields;
     do
     {
-        fields.push_back(readCSVFieldIntoString(in, format_settings.csv));
+        fields.push_back(readCSVFieldIntoString(in, csv_settings));
         skipWhitespacesAndTabs(in);
-    } while (checkChar(format_settings.csv.delimiter, in));
+    } while (checkChar(csv_settings.delimiter, in));
 
-    skipCSVRowEndDelimiter(in, format_settings.csv);
+    skipCSVRowEndDelimiter(in, csv_settings);
     return fields;
 }
 
@@ -347,7 +351,7 @@ DataTypes CSVSchemaReader::determineTypesFromData(ReadBuffer & in) const
     auto fields = readRow(in);
     DataTypes data_types;
     for (size_t i = 0; i != fields.size(); ++i)
-        data_types.push_back(std::make_shared<DataTypeNullable>(std::make_shared<DataTypeString>()));
+        data_types.push_back(makeNullable(std::make_shared<DataTypeString>()));
     return data_types;
 }
 

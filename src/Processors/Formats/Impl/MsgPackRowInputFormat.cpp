@@ -369,7 +369,7 @@ bool MsgPackRowInputFormat::readRow(MutableColumns & columns, RowReadExtension &
 
 MsgPackNamesAndTypesReader::MsgPackNamesAndTypesReader(const FormatSettings & forma_settings_)
     : number_of_columns(forma_settings_.msgpack.number_of_columns)
-    , max_depth_for_structure_determination(forma_settings_.msgpack.max_depth_for_structure_determination)
+    , max_depth_for_schema_inference(forma_settings_.max_depth_for_schema_inference)
 {
     if (!number_of_columns)
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "You must specify setting input_format_msgpack_number_of_columns to extract table schema from MsgPack file");
@@ -464,13 +464,13 @@ NamesAndTypesList MsgPackNamesAndTypesReader::readSchema(ReadBuffer & in) const
     DataTypes data_types(number_of_columns);
     std::unordered_set<size_t> parsed_indexes;
     size_t attempts = 0;
-    while (parsed_indexes.size() != number_of_columns && attempts <= max_depth_for_structure_determination)
+    while (parsed_indexes.size() != number_of_columns && attempts < max_depth_for_schema_inference)
     {
         for (size_t i = 0; i != number_of_columns; ++i)
         {
             if (buf.eof())
             {
-                attempts = max_depth_for_structure_determination;
+                attempts = max_depth_for_schema_inference;
                 break;
             }
             auto object_handle = readObject(buf);
@@ -484,7 +484,7 @@ NamesAndTypesList MsgPackNamesAndTypesReader::readSchema(ReadBuffer & in) const
         throw Exception(
             ErrorCodes::CANNOT_EXTRACT_TABLE_STRUCTURE,
             "Cannot determine table structure by first {} rows of parsed msgpack data, because some columns contain only Nulls. To increase the maximum "
-            "number of rows to read for structure determination, use setting input_format_msgpack_max_depth_for_structure_determination", max_depth_for_structure_determination);
+            "number of rows to read for structure determination, use setting input_format_msgpack_max_depth_for_schema_inference", max_depth_for_schema_inference);
     }
 
     return NamesAndTypesList::createFromNamesAndTypes(column_names, data_types);

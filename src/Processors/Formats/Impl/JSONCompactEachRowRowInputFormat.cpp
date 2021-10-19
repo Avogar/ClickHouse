@@ -20,6 +20,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int INCORRECT_DATA;
+    extern const int CANNOT_EXTRACT_TABLE_STRUCTURE;
 }
 
 inline void skipEndOfLine(ReadBuffer & in);
@@ -39,7 +40,7 @@ JSONCompactEachRowRowInputFormat::JSONCompactEachRowRowInputFormat(
         with_names_,
         with_types_,
         format_settings_,
-        std::make_unique<JSONCompactEachRowRowSchemaReader>(with_names_, with_types_, yield_strings_))
+        std::make_unique<JSONCompactEachRowRowSchemaReader>(with_names_, with_types_, yield_strings_, format_settings_))
     , yield_strings(yield_strings_)
 {
 }
@@ -180,8 +181,8 @@ bool JSONCompactEachRowRowInputFormat::parseRowEndWithDiagnosticInfo(WriteBuffer
     return true;
 }
 
-JSONCompactEachRowRowSchemaReader::JSONCompactEachRowRowSchemaReader(bool with_names_, bool with_types_, bool yield_strings_)
-    : FormatWithNamesAndTypesSchemaReader(with_names_, with_types_), yield_strings(yield_strings_)
+JSONCompactEachRowRowSchemaReader::JSONCompactEachRowRowSchemaReader(bool with_names_, bool with_types_, bool json_strings_, const FormatSettings & format_settings_)
+    : FormatWithNamesAndTypesSchemaReader(with_names_, with_types_), json_strings(json_strings_), max_depth_for_schema_inference(format_settings_.max_depth_for_schema_inference)
 {
 }
 
@@ -215,13 +216,20 @@ Names JSONCompactEachRowRowSchemaReader::readDataTypeNames(ReadBuffer & in) cons
 
 DataTypes JSONCompactEachRowRowSchemaReader::determineTypesFromData(ReadBuffer & in) const
 {
-    String line = readJSONCompactEachRowLineIntoString(in);
-    Poco::JSON::Parser parser;
-    auto var = parser.parse(line);
-    if (!var.isList())
-        throw Exception{ErrorCodes::INCORRECT_DATA, "JSONCompact row is not a JSON list"};
+    auto extractor = [](const Poco::Dynamic::Var & var)
+    {
+        if (!var.isArray())
+            throw Exception{ErrorCodes::INCORRECT_DATA, "JSONEachCompact row is not a JSON array"};
 
-    Poco::JSON::Array::Ptr array = var.extract<Poco::JSON::Array::Ptr>();
+        Poco::JSON::Array::Ptr array = var.extract<Poco::JSON::Array::Ptr>();
+        std::vector<Poco::Dynamic::Var> fields;
+        fields.reserve(array->size());
+        for (size_t i = 0; i != array->size(); ++i)
+            fields.push_back(array->get(i));
+        return fields;
+    };
+
+    return determineColumnDataTypesFromJSONCompactEachRowData(in, max_depth_for_schema_inference, json_strings, extractor);
 }
 
 void registerInputFormatJSONCompactEachRow(FormatFactory & factory)
@@ -246,25 +254,17 @@ void registerInputFormatJSONCompactEachRow(FormatFactory & factory)
 
 void registerJSONCompactEachRowSchemaReader(FormatFactory & factory)
 {
-    factory.registerSchemaReader("JSONCompactEachRowWithNames", [](const FormatSettings &)
+    for (bool json_strings : {false, true})
     {
-        return std::make_shared<JSONCompactEachRowRowSchemaReader>(true, false);
-    });
-
-    factory.registerSchemaReader("JSONCompactStringsEachRowWithNames", [](const FormatSettings &)
-    {
-        return std::make_shared<JSONCompactEachRowRowSchemaReader>(true, false);
-    });
-
-    factory.registerSchemaReader("JSONCompactEachRowWithNamesAndTypes", [](const FormatSettings &)
-    {
-        return std::make_shared<JSONCompactEachRowRowSchemaReader>(true, true);
-    });
-
-    factory.registerSchemaReader("JSONCompactStringsEachRowWithNamesAndTypes", [](const FormatSettings &)
-    {
-        return std::make_shared<JSONCompactEachRowRowSchemaReader>(true, true);
-    });
+        auto register_func = [&](const String & format_name, bool with_names, bool with_types)
+        {
+            factory.registerSchemaReader(format_name, [=](const FormatSettings & format_settings)
+            {
+                return std::make_shared<JSONCompactEachRowRowSchemaReader>(with_names, with_types, json_strings, format_settings);
+            });
+        };
+        registerWithNamesAndTypes(json_strings ? "JSONCompactStringsEachRow" : "JSONCompactEachRow", register_func);
+    }
 }
 
 void registerFileSegmentationEngineJSONCompactEachRow(FormatFactory & factory)

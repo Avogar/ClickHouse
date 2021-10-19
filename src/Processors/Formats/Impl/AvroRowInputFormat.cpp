@@ -882,7 +882,7 @@ DataTypePtr AvroSchemaReader::avroNodeToDataType(avro::NodePtr node) const
             if (node->leaves() == 2 && (node->leafAt(0)->type() == avro::Type::AVRO_NULL || node->leafAt(1)->type() == avro::Type::AVRO_NULL))
             {
                 size_t nested_leaf_index = node->leafAt(0)->type() == avro::Type::AVRO_NULL ? 1 : 0;
-                return std::make_shared<DataTypeNullable>(avroNodeToDataType(node->leafAt(nested_leaf_index)));
+                return makeNullable(avroNodeToDataType(node->leafAt(nested_leaf_index)));
             }
             throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Avro type  UNION is not supported for inserting.");
         case avro::Type::AVRO_SYMBOLIC:

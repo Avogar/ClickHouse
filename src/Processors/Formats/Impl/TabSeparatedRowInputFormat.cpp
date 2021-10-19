@@ -1,11 +1,11 @@
 #include <IO/ReadHelpers.h>
 #include <IO/Operators.h>
-#include <IO/BufferWithOwnMemory.h>
 
 #include <Processors/Formats/Impl/TabSeparatedRowInputFormat.h>
 #include <Formats/verbosePrintString.h>
 #include <Formats/FormatFactory.h>
 #include <Formats/registerWithNamesAndTypes.h>
+#include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/Serializations/SerializationNullable.h>
 #include <DataTypes/DataTypeFactory.h>
@@ -105,6 +105,7 @@ bool TabSeparatedRowInputFormat::readField(IColumn & column, const DataTypePtr &
         serialization->deserializeTextRaw(column, *in, format_settings);
         return true;
     }
+
 
     if (as_nullable)
         return SerializationNullable::deserializeTextEscapedImpl(column, *in, format_settings, serialization);
@@ -245,7 +246,7 @@ DataTypes TabSeparatedSchemaReader::determineTypesFromData(ReadBuffer & in) cons
     auto fields = readRow(in);
     DataTypes data_types;
     for (size_t i = 0; i != fields.size(); ++i)
-        data_types.push_back(std::make_shared<DataTypeNullable>(std::make_shared<DataTypeString>()));
+        data_types.push_back(makeNullable(std::make_shared<DataTypeString>()));
     return data_types;
 }
 

@@ -92,6 +92,7 @@ public:
 private:
     DataTypes readDataTypes(ReadBuffer & in) const;
     virtual DataTypes determineTypesFromData(ReadBuffer & in) const = 0;
+
     bool with_names;
     bool with_types;
 };
