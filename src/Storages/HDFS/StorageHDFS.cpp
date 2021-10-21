@@ -2,31 +2,31 @@
 
 #if USE_HDFS
 
-#include <filesystem>
-#include <DataTypes/DataTypeString.h>
-#include <Formats/FormatFactory.h>
-#include <Formats/readSchemaFromFormat.h>
-#include <IO/ReadHelpers.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/evaluateConstantExpression.h>
-#include <Parsers/ASTLiteral.h>
-#include <Processors/Executors/PullingPipelineExecutor.h>
-#include <Processors/Formats/IInputFormat.h>
-#include <Processors/Formats/IOutputFormat.h>
-#include <Processors/Sinks/SinkToStorage.h>
-#include <Processors/Sources/SourceWithProgress.h>
-#include <QueryPipeline/Pipe.h>
-#include <QueryPipeline/QueryPipeline.h>
-#include <Storages/HDFS/HDFSCommon.h>
-#include <Storages/HDFS/ReadBufferFromHDFS.h>
-#include <Storages/HDFS/StorageHDFS.h>
-#include <Storages/HDFS/WriteBufferFromHDFS.h>
-#include <Storages/StorageFactory.h>
-#include <Common/parseGlobs.h>
-#include <Poco/URI.h>
-#include <hdfs/hdfs.h>
-#include <re2/re2.h>
-#include <re2/stringpiece.h>
+#    include <filesystem>
+#    include <DataTypes/DataTypeString.h>
+#    include <Formats/FormatFactory.h>
+#    include <Formats/ReadSchemaUtils.h>
+#    include <IO/ReadHelpers.h>
+#    include <Interpreters/Context.h>
+#    include <Interpreters/evaluateConstantExpression.h>
+#    include <Parsers/ASTLiteral.h>
+#    include <Processors/Executors/PullingPipelineExecutor.h>
+#    include <Processors/Formats/IInputFormat.h>
+#    include <Processors/Formats/IOutputFormat.h>
+#    include <Processors/Sinks/SinkToStorage.h>
+#    include <Processors/Sources/SourceWithProgress.h>
+#    include <QueryPipeline/Pipe.h>
+#    include <QueryPipeline/QueryPipeline.h>
+#    include <Storages/HDFS/HDFSCommon.h>
+#    include <Storages/HDFS/ReadBufferFromHDFS.h>
+#    include <Storages/HDFS/StorageHDFS.h>
+#    include <Storages/HDFS/WriteBufferFromHDFS.h>
+#    include <Storages/StorageFactory.h>
+#    include <hdfs/hdfs.h>
+#    include <re2/re2.h>
+#    include <re2/stringpiece.h>
+#    include <Poco/URI.h>
+#    include <Common/parseGlobs.h>
 
 
 namespace fs = std::filesystem;

@@ -90,7 +90,7 @@ class JSONEachRowSchemaReader : public ISchemaReader
 public:
     JSONEachRowSchemaReader(bool json_strings, const FormatSettings & format_settings);
 
-    NamesAndTypesList readSchema(ReadBuffer & in) const override;
+    NamesAndTypesList readSchema(ReadBuffer & in) override;
 
 private:
     bool json_strings;

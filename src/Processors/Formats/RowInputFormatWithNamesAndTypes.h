@@ -85,13 +85,13 @@ class FormatWithNamesAndTypesSchemaReader : public ISchemaReader
 public:
     FormatWithNamesAndTypesSchemaReader(bool with_names_, bool with_types_);
 
-    NamesAndTypesList readSchema(ReadBuffer & in) const override;
-    virtual Names readColumnNames(ReadBuffer & in) const = 0;
-    virtual Names readDataTypeNames(ReadBuffer & in) const = 0;
+    NamesAndTypesList readSchema(ReadBuffer & in) override;
+    virtual Names readColumnNames(ReadBuffer & in) = 0;
+    virtual Names readDataTypeNames(ReadBuffer & in) = 0;
 
 private:
-    DataTypes readDataTypes(ReadBuffer & in) const;
-    virtual DataTypes determineTypesFromData(ReadBuffer & in) const = 0;
+    DataTypes readDataTypes(ReadBuffer & in);
+    virtual DataTypes determineTypesFromData(ReadBuffer & in) = 0;
 
     bool with_names;
     bool with_types;

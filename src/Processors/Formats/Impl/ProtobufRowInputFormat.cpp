@@ -83,7 +83,7 @@ ProtobufSchemaReader::ProtobufSchemaReader(const FormatSettings & format_setting
 {
 }
 
-NamesAndTypesList ProtobufSchemaReader::readSchema() const
+NamesAndTypesList ProtobufSchemaReader::readSchema()
 {
     const auto * message_descriptor = ProtobufSchemas::instance().getMessageTypeForFormatSchema(schema_info);
     return protobufSchemaToCHSchema(message_descriptor);

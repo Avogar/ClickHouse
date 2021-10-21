@@ -65,7 +65,7 @@ BinaryWithNamesAndTypesSchemaReader::BinaryWithNamesAndTypesSchemaReader() : For
 {
 }
 
-std::vector<std::string> BinaryWithNamesAndTypesSchemaReader::readRow(ReadBuffer & in) const
+std::vector<std::string> BinaryWithNamesAndTypesSchemaReader::readRow(ReadBuffer & in)
 {
     std::vector<String> fields;
     String field;
@@ -77,13 +77,13 @@ std::vector<std::string> BinaryWithNamesAndTypesSchemaReader::readRow(ReadBuffer
     return fields;
 }
 
-Names BinaryWithNamesAndTypesSchemaReader::readColumnNames(ReadBuffer & in) const
+Names BinaryWithNamesAndTypesSchemaReader::readColumnNames(ReadBuffer & in)
 {
     readVarUInt(read_columns, in);
     return readRow(in);
 }
 
-Names BinaryWithNamesAndTypesSchemaReader::readDataTypeNames(ReadBuffer & in) const
+Names BinaryWithNamesAndTypesSchemaReader::readDataTypeNames(ReadBuffer & in)
 {
     return readRow(in);
 }

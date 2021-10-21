@@ -63,13 +63,13 @@ class JSONCompactEachRowRowSchemaReader : public FormatWithNamesAndTypesSchemaRe
 public:
     JSONCompactEachRowRowSchemaReader(bool with_names_, bool with_types_, bool yield_strings_, const FormatSettings & format_settings_);
 
-    Names readColumnNames(ReadBuffer & in) const override;
-    Names readDataTypeNames(ReadBuffer & in) const override;
+    Names readColumnNames(ReadBuffer & in) override;
+    Names readDataTypeNames(ReadBuffer & in) override;
 
 private:
-    DataTypes determineTypesFromData(ReadBuffer & in) const override;
+    DataTypes determineTypesFromData(ReadBuffer & in) override;
 
-    std::vector<std::string> readRow(ReadBuffer & in) const;
+    std::vector<std::string> readRow(ReadBuffer & in);
 
     bool json_strings;
     size_t max_depth_for_schema_inference;

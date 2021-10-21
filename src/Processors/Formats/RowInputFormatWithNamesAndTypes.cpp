@@ -259,7 +259,7 @@ FormatWithNamesAndTypesSchemaReader::FormatWithNamesAndTypesSchemaReader(bool wi
 {
 }
 
-NamesAndTypesList FormatWithNamesAndTypesSchemaReader::readSchema(ReadBuffer & in) const
+NamesAndTypesList FormatWithNamesAndTypesSchemaReader::readSchema(ReadBuffer & in)
 {
     if (with_names || with_types)
         skipBOMIfExists(in);
@@ -279,7 +279,7 @@ NamesAndTypesList FormatWithNamesAndTypesSchemaReader::readSchema(ReadBuffer & i
     return NamesAndTypesList::createFromNamesAndTypes(column_names, data_types);
 }
 
-DataTypes FormatWithNamesAndTypesSchemaReader::readDataTypes(ReadBuffer & in) const
+DataTypes FormatWithNamesAndTypesSchemaReader::readDataTypes(ReadBuffer & in)
 {
     if (with_types)
     {

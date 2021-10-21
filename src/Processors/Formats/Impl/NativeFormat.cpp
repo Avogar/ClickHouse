@@ -86,7 +86,7 @@ private:
 class NativeSchemaReader : public ISchemaReader
 {
 public:
-    NamesAndTypesList readSchema(ReadBuffer & in) const override
+    NamesAndTypesList readSchema(ReadBuffer & in) override
     {
         auto reader = NativeReader(in, 0);
         auto block = reader.read();

@@ -48,7 +48,7 @@ private:
 class ORCSchemaReader : public ISchemaReader
 {
 public:
-    NamesAndTypesList readSchema(ReadBuffer & in) const override;
+    NamesAndTypesList readSchema(ReadBuffer & in) override;
 };
 
 }

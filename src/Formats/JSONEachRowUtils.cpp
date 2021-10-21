@@ -1,5 +1,6 @@
 #include <IO/ReadHelpers.h>
 #include <Formats/JSONEachRowUtils.h>
+#include <Formats/ReadSchemaUtils.h>
 #include <IO/ReadBufferFromString.h>
 #include <DataTypes/Serializations/SerializationNullable.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -103,16 +104,18 @@ template <const char opening_bracket, const char closing_bracket>
 static String readJSONEachRowLineIntoStringImpl(ReadBuffer & in)
 {
     skipWhitespaceIfAny(in);
+
     if (in.eof())
         throw Exception(ErrorCodes::INCORRECT_DATA, "Cannot read JSON object: unexpected end of file");
 
-    if (!checkChar(opening_bracket, in))
+    char * pos = in.position();
+    if (*pos != opening_bracket)
         throw Exception(ErrorCodes::INCORRECT_DATA, "Cannot read JSONEachRow line: {} expected, {} got", opening_bracket, *in.position());
+    ++pos;
 
     Memory memory;
     size_t balance = 1;
     bool quotes = false;
-    char * pos = in.position();
     while (loadAtPosition(in, memory, pos) && balance)
     {
         if (quotes)
@@ -186,6 +189,9 @@ static DataTypePtr getDataTypeFromJSONField(const Poco::Dynamic::Var & field)
     if (field.isArray())
     {
         Poco::JSON::Array::Ptr array = field.extract<Poco::JSON::Array::Ptr>();
+        if (array->size() == 0)
+            return nullptr;
+
         DataTypes nested_data_types;
         bool is_tuple = false;
         for (size_t i = 0; i != array->size(); ++i)
@@ -199,6 +205,7 @@ static DataTypePtr getDataTypeFromJSONField(const Poco::Dynamic::Var & field)
 
             nested_data_types.push_back(std::move(type));
         }
+
         if (is_tuple)
             return std::make_shared<DataTypeTuple>(nested_data_types);
 
@@ -225,12 +232,7 @@ static DataTypes determineColumnDataTypesFromJSONEachRowDataImpl(ReadBuffer & in
         while (checkChar(',', in));
         skipWhitespaceIfAny(in);
         assertChar(closing_bracket, in);
-
-        DataTypes data_types;
-        for (size_t i = 0; i != number_of_columns; ++i)
-            data_types.push_back(makeNullable(std::make_shared<DataTypeString>()));
-
-        return data_types;
+        return generateDefaultDataTypes(number_of_columns);
     }
 
     Poco::JSON::Parser parser;

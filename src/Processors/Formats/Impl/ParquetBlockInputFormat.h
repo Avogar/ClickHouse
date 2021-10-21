@@ -43,7 +43,7 @@ private:
 class ParquetSchemaReader : public ISchemaReader
 {
 public:
-    NamesAndTypesList readSchema(ReadBuffer & in) const override;
+    NamesAndTypesList readSchema(ReadBuffer & in) override;
 };
 
 }

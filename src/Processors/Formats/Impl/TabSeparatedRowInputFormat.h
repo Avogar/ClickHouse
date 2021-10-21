@@ -51,15 +51,13 @@ class TabSeparatedSchemaReader : public FormatWithNamesAndTypesSchemaReader
 public:
     TabSeparatedSchemaReader(bool with_names_, bool with_types_, bool is_raw_);
 
-    Names readColumnNames(ReadBuffer & in) const override;
-    Names readDataTypeNames(ReadBuffer & in) const override;
+    Names readColumnNames(ReadBuffer & in) override;
+    Names readDataTypeNames(ReadBuffer & in) override;
 
 private:
-    DataTypes determineTypesFromData(ReadBuffer & in) const override;
+    DataTypes determineTypesFromData(ReadBuffer & in) override;
 
-    std::vector<std::string> readRow(ReadBuffer & in) const;
-    bool with_names;
-    bool with_types;
+    std::vector<std::string> readRow(ReadBuffer & in);
     bool is_raw;
 };
 

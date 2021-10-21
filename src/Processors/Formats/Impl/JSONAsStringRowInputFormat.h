@@ -40,7 +40,7 @@ private:
 class JSONAsStringExternalSchemaReader : public IExternalSchemaReader
 {
 public:
-    NamesAndTypesList readSchema() const override
+    NamesAndTypesList readSchema() override
     {
         return {{"json", std::make_shared<DataTypeString>()}};
     }

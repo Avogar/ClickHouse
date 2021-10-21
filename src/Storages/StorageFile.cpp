@@ -14,9 +14,9 @@
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
 
-#include <Formats/FormatFactory.h>
-#include <Formats/readSchemaFromFormat.h>
 #include <DataTypes/DataTypeString.h>
+#include <Formats/FormatFactory.h>
+#include <Formats/ReadSchemaUtils.h>
 #include <Processors/Sinks/SinkToStorage.h>
 #include <Processors/Transforms/AddingDefaultsTransform.h>
 

@@ -119,7 +119,7 @@ ArrowSchemaReader::ArrowSchemaReader(bool stream_) : stream(stream_)
 {
 }
 
-NamesAndTypesList ArrowSchemaReader::readSchema(ReadBuffer & in) const
+NamesAndTypesList ArrowSchemaReader::readSchema(ReadBuffer & in)
 {
     std::shared_ptr<arrow::Schema> schema;
 

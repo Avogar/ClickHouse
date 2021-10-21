@@ -30,7 +30,7 @@ private:
 class LinaAsStringSchemaReader : public IExternalSchemaReader
 {
 public:
-    NamesAndTypesList readSchema() const override
+    NamesAndTypesList readSchema() override
     {
         return {{"line", std::make_shared<DataTypeString>()}};
     }

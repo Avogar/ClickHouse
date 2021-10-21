@@ -128,7 +128,7 @@ void ParquetBlockInputFormat::prepareReader()
     }
 }
 
-NamesAndTypesList ParquetSchemaReader::readSchema(ReadBuffer & in) const
+NamesAndTypesList ParquetSchemaReader::readSchema(ReadBuffer & in)
 {
     std::unique_ptr<parquet::arrow::FileReader> file_reader;
     std::shared_ptr<arrow::Schema> schema;

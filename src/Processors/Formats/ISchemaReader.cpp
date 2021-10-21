@@ -11,4 +11,9 @@ Names generateDefaultColumnNames(size_t columns)
     return column_names;
 }
 
+DataTypes generateDefaultDataTypes(size_t columns)
+{
+
+}
+
 }

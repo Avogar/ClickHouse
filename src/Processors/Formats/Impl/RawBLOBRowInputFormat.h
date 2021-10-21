@@ -25,11 +25,7 @@ public:
 class RawBLOBSchemaReader: public IExternalSchemaReader
 {
 public:
-    RawBLOBSchemaReader(const FormatSettings & format_settings_)
-    {
-    }
-
-    NamesAndTypesList readSchema() const override
+    NamesAndTypesList readSchema() override
     {
         return {{"raw_blob", std::make_shared<DataTypeString>()}};
     }

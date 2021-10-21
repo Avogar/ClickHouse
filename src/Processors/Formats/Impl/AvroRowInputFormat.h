@@ -152,10 +152,10 @@ class AvroSchemaReader : public ISchemaReader
 public:
     AvroSchemaReader(bool confluent_, const FormatSettings & format_settings_);
 
-    NamesAndTypesList readSchema(ReadBuffer & in) const override;
+    NamesAndTypesList readSchema(ReadBuffer & in) override;
 
 private:
-    DataTypePtr avroNodeToDataType(avro::NodePtr node) const;
+    DataTypePtr avroNodeToDataType(avro::NodePtr node);
 
     bool confluent;
     const FormatSettings format_settings;

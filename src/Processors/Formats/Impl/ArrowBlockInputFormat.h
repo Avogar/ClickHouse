@@ -51,7 +51,7 @@ class ArrowSchemaReader : public ISchemaReader
 public:
     explicit ArrowSchemaReader(bool stream);
 
-    NamesAndTypesList readSchema(ReadBuffer & in) const override;
+    NamesAndTypesList readSchema(ReadBuffer & in) override;
 
 private:
     bool stream;

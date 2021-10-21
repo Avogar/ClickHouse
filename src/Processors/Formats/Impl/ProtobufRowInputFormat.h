@@ -49,7 +49,7 @@ class ProtobufSchemaReader : public IExternalSchemaReader
 public:
     ProtobufSchemaReader(const FormatSettings & format_settings);
 
-    NamesAndTypesList readSchema() const override;
+    NamesAndTypesList readSchema() override;
 
 private:
     FormatSchemaInfo schema_info;

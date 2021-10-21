@@ -76,7 +76,7 @@ void registerInputFormatLineAsString(FormatFactory & factory)
 void registerLineAsStringSchemaReader(FormatFactory & factory)
 {
     factory.registerExternalSchemaReader("LineAsString", [](
-            const FormatSettings &  settings)
+            const FormatSettings &)
     {
         return std::make_shared<LinaAsStringSchemaReader>();
     });

@@ -5,9 +5,9 @@
 #include <Formats/verbosePrintString.h>
 #include <Formats/registerWithNamesAndTypes.h>
 #include <Formats/FormatFactory.h>
+#include <Formats/ReadSchemaUtils.h>
 #include <Processors/Formats/Impl/CSVRowInputFormat.h>
 #include <DataTypes/Serializations/SerializationNullable.h>
-#include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 
@@ -323,7 +323,7 @@ CSVSchemaReader::CSVSchemaReader(bool with_names_, bool with_types_, const Forma
 {
 }
 
-std::vector<std::string> CSVSchemaReader::readRow(ReadBuffer & in) const
+std::vector<std::string> CSVSchemaReader::readRow(ReadBuffer & in)
 {
     std::vector<String> fields;
     do
@@ -336,23 +336,20 @@ std::vector<std::string> CSVSchemaReader::readRow(ReadBuffer & in) const
     return fields;
 }
 
-Names CSVSchemaReader::readColumnNames(ReadBuffer & in) const
+Names CSVSchemaReader::readColumnNames(ReadBuffer & in)
 {
     return readRow(in);
 }
 
-Names CSVSchemaReader::readDataTypeNames(ReadBuffer & in) const
+Names CSVSchemaReader::readDataTypeNames(ReadBuffer & in)
 {
     return readRow(in);
 }
 
-DataTypes CSVSchemaReader::determineTypesFromData(ReadBuffer & in) const
+DataTypes CSVSchemaReader::determineTypesFromData(ReadBuffer & in)
 {
     auto fields = readRow(in);
-    DataTypes data_types;
-    for (size_t i = 0; i != fields.size(); ++i)
-        data_types.push_back(makeNullable(std::make_shared<DataTypeString>()));
-    return data_types;
+    return generateDefaultDataTypes(fields.size());
 }
 
 void registerFileSegmentationEngineCSV(FormatFactory & factory)

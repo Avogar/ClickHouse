@@ -54,12 +54,12 @@ class CSVSchemaReader : public FormatWithNamesAndTypesSchemaReader
 public:
     CSVSchemaReader(bool with_names_, bool with_types_, const FormatSettings & format_setting_);
 
-    Names readColumnNames(ReadBuffer & in) const override;
-    Names readDataTypeNames(ReadBuffer & in) const override;
+    Names readColumnNames(ReadBuffer & in) override;
+    Names readDataTypeNames(ReadBuffer & in) override;
 
 private:
-    DataTypes determineTypesFromData(ReadBuffer & in) const override;
-    std::vector<std::string> readRow(ReadBuffer & in) const;
+    DataTypes determineTypesFromData(ReadBuffer & in) override;
+    std::vector<std::string> readRow(ReadBuffer & in);
 
     const FormatSettings::CSV csv_settings;
 };

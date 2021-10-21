@@ -29,7 +29,7 @@
 #include <IO/WriteHelpers.h>
 
 #include <Formats/FormatFactory.h>
-#include <Formats/readSchemaFromFormat.h>
+#include <Formats/ReadSchemaUtils.h>
 
 #include <Processors/Transforms/AddingDefaultsTransform.h>
 #include <Processors/Formats/IOutputFormat.h>

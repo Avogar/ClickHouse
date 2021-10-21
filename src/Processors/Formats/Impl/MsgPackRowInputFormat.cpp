@@ -376,7 +376,7 @@ MsgPackNamesAndTypesReader::MsgPackNamesAndTypesReader(const FormatSettings & fo
 }
 
 
-msgpack::object_handle MsgPackNamesAndTypesReader::readObject(PeekableReadBuffer & buf) const
+msgpack::object_handle MsgPackNamesAndTypesReader::readObject(PeekableReadBuffer & buf)
 {
     if (buf.eof())
         throw Exception(ErrorCodes::UNEXPECTED_END_OF_FILE, "Unexpected eof while parsing msgpack object");
@@ -407,7 +407,7 @@ msgpack::object_handle MsgPackNamesAndTypesReader::readObject(PeekableReadBuffer
     return object_handle;
 }
 
-DataTypePtr MsgPackNamesAndTypesReader::getDataType(const msgpack::object & object) const
+DataTypePtr MsgPackNamesAndTypesReader::getDataType(const msgpack::object & object)
 {
     switch (object.type)
     {
@@ -454,7 +454,7 @@ DataTypePtr MsgPackNamesAndTypesReader::getDataType(const msgpack::object & obje
     }
 }
 
-NamesAndTypesList MsgPackNamesAndTypesReader::readSchema(ReadBuffer & in) const
+NamesAndTypesList MsgPackNamesAndTypesReader::readSchema(ReadBuffer & in)
 {
     Names column_names;
     for (size_t i = 0; i != number_of_columns; ++i)

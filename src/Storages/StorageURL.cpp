@@ -12,9 +12,9 @@
 #include <IO/ConnectionTimeoutsContext.h>
 
 #include <Formats/FormatFactory.h>
-#include <Processors/Formats/IOutputFormat.h>
+#include <Formats/ReadSchemaUtils.h>
 #include <Processors/Formats/IInputFormat.h>
-#include <Formats/readSchemaFromFormat.h>
+#include <Processors/Formats/IOutputFormat.h>
 
 #include <Processors/Transforms/AddingDefaultsTransform.h>
 

@@ -186,7 +186,7 @@ JSONCompactEachRowRowSchemaReader::JSONCompactEachRowRowSchemaReader(bool with_n
 {
 }
 
-std::vector<String> JSONCompactEachRowRowSchemaReader::readRow(ReadBuffer & in) const
+std::vector<String> JSONCompactEachRowRowSchemaReader::readRow(ReadBuffer & in)
 {
     skipJSONCompactRowStartDelimiter(in);
     std::vector<String> fields;
@@ -204,17 +204,17 @@ std::vector<String> JSONCompactEachRowRowSchemaReader::readRow(ReadBuffer & in) 
     return fields;
 }
 
-Names JSONCompactEachRowRowSchemaReader::readColumnNames(ReadBuffer & in) const
+Names JSONCompactEachRowRowSchemaReader::readColumnNames(ReadBuffer & in)
 {
     return readRow(in);
 }
 
-Names JSONCompactEachRowRowSchemaReader::readDataTypeNames(ReadBuffer & in) const
+Names JSONCompactEachRowRowSchemaReader::readDataTypeNames(ReadBuffer & in)
 {
     return readRow(in);
 }
 
-DataTypes JSONCompactEachRowRowSchemaReader::determineTypesFromData(ReadBuffer & in) const
+DataTypes JSONCompactEachRowRowSchemaReader::determineTypesFromData(ReadBuffer & in)
 {
     auto extractor = [](const Poco::Dynamic::Var & var)
     {

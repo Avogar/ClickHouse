@@ -82,7 +82,7 @@ BlockIO InterpreterDescribeQuery::execute()
         {
             /// If table function doesn't have static structure we should create
             /// a storage to get columns description.
-            auto storage = table_function_ptr->execute(table_expression.table_function, getContext(), "");
+            auto storage = table_function_ptr->execute(table_expression.table_function, getContext(), table_expression.dumpTree());
             columns = storage->getInMemoryMetadataPtr()->columns;
         }
     }

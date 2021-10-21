@@ -44,7 +44,7 @@ class CapnProtoSchemaReader : public IExternalSchemaReader
 public:
     CapnProtoSchemaReader(const FormatSettings & format_settings_);
 
-    NamesAndTypesList readSchema() const override;
+    NamesAndTypesList readSchema() override;
 
 private:
     const FormatSettings format_settings;

@@ -310,7 +310,7 @@ JSONEachRowSchemaReader::JSONEachRowSchemaReader(bool json_strings_, const Forma
 {
 }
 
-NamesAndTypesList JSONEachRowSchemaReader::readSchema(ReadBuffer & in) const
+NamesAndTypesList JSONEachRowSchemaReader::readSchema(ReadBuffer & in)
 {
     skipBOMIfExists(in);
     skipWhitespaceIfAny(in);
@@ -369,6 +369,19 @@ void registerNonTrivialPrefixAndSuffixCheckerJSONEachRow(FormatFactory & factory
 {
     factory.registerNonTrivialPrefixAndSuffixChecker("JSONEachRow", nonTrivialPrefixAndSuffixCheckerJSONEachRowImpl);
     factory.registerNonTrivialPrefixAndSuffixChecker("JSONStringsEachRow", nonTrivialPrefixAndSuffixCheckerJSONEachRowImpl);
+}
+
+void registerJSONEachRowSchemaReader(FormatFactory & factory)
+{
+    factory.registerSchemaReader("JSONEachRow", [](const FormatSettings & settings)
+    {
+        return std::make_unique<JSONEachRowSchemaReader>(false, settings);
+    });
+
+    factory.registerSchemaReader("JSONStringsEachRow", [](const FormatSettings & settings)
+    {
+        return std::make_unique<JSONEachRowSchemaReader>(true, settings);
+    });
 }
 
 }

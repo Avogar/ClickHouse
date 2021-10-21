@@ -41,7 +41,7 @@ namespace
 
         throw Exception(
             "Table function '" + name
-                + "' allows 2 arguments only for formats that support schema inference and for Distributed format in table function "
+                + "' allows automatic structure determination only for formats that support schema inference and for Distributed format in table function "
                   "'file'",
             ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
     }

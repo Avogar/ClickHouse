@@ -1,16 +1,17 @@
 #include <IO/ReadHelpers.h>
 #include <IO/Operators.h>
 
-#include <Processors/Formats/Impl/TabSeparatedRowInputFormat.h>
-#include <Formats/verbosePrintString.h>
-#include <Formats/FormatFactory.h>
-#include <Formats/registerWithNamesAndTypes.h>
-#include <DataTypes/DataTypeNothing.h>
-#include <DataTypes/DataTypeLowCardinality.h>
-#include <DataTypes/Serializations/SerializationNullable.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeLowCardinality.h>
+#include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/Serializations/SerializationNullable.h>
+#include <Formats/FormatFactory.h>
+#include <Formats/ReadSchemaUtils.h>
+#include <Formats/registerWithNamesAndTypes.h>
+#include <Formats/verbosePrintString.h>
+#include <Processors/Formats/Impl/TabSeparatedRowInputFormat.h>
 
 namespace DB
 {
@@ -213,7 +214,7 @@ TabSeparatedSchemaReader::TabSeparatedSchemaReader(bool with_names_, bool with_t
 {
 }
 
-std::vector<String> TabSeparatedSchemaReader::readRow(ReadBuffer & in) const
+std::vector<String> TabSeparatedSchemaReader::readRow(ReadBuffer & in)
 {
     std::vector<String> fields;
     do
@@ -231,23 +232,20 @@ std::vector<String> TabSeparatedSchemaReader::readRow(ReadBuffer & in) const
     return fields;
 }
 
-Names TabSeparatedSchemaReader::readColumnNames(ReadBuffer & in) const
+Names TabSeparatedSchemaReader::readColumnNames(ReadBuffer & in)
 {
     return readRow(in);
 }
 
-Names TabSeparatedSchemaReader::readDataTypeNames(ReadBuffer & in) const
+Names TabSeparatedSchemaReader::readDataTypeNames(ReadBuffer & in)
 {
     return readRow(in);
 }
 
-DataTypes TabSeparatedSchemaReader::determineTypesFromData(ReadBuffer & in) const
+DataTypes TabSeparatedSchemaReader::determineTypesFromData(ReadBuffer & in)
 {
     auto fields = readRow(in);
-    DataTypes data_types;
-    for (size_t i = 0; i != fields.size(); ++i)
-        data_types.push_back(makeNullable(std::make_shared<DataTypeString>()));
-    return data_types;
+    return generateDefaultDataTypes(fields.size());
 }
 
 void registerInputFormatTabSeparated(FormatFactory & factory)
@@ -288,7 +286,6 @@ void registerTSVSchemaReader(FormatFactory & factory)
         registerWithNamesAndTypes(is_raw ? "TSVRaw" : "TSV", register_func);
     }
 }
-
 
 static std::pair<bool, size_t> fileSegmentationEngineTabSeparatedImpl(ReadBuffer & in, DB::Memory<> & memory, size_t min_chunk_size, bool is_raw, size_t min_rows)
 {

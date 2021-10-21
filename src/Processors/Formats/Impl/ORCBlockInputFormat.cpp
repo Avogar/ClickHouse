@@ -130,7 +130,7 @@ void ORCBlockInputFormat::prepareReader()
     }
 }
 
-NamesAndTypesList ORCSchemaReader::readSchema(ReadBuffer & in) const
+NamesAndTypesList ORCSchemaReader::readSchema(ReadBuffer & in)
 {
     std::unique_ptr<arrow::adapters::orc::ORCFileReader> file_reader;
     std::shared_ptr<arrow::Schema> schema;

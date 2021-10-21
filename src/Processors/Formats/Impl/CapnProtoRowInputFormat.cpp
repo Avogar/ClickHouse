@@ -287,7 +287,7 @@ CapnProtoSchemaReader::CapnProtoSchemaReader(const FormatSettings & format_setti
 {
 }
 
-NamesAndTypesList CapnProtoSchemaReader::readSchema() const
+NamesAndTypesList CapnProtoSchemaReader::readSchema()
 {
     auto schema_info = FormatSchemaInfo(
         format_settings.schema.format_schema,

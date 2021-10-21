@@ -77,11 +77,11 @@ class MsgPackNamesAndTypesReader : public ISchemaReader
 {
 public:
     MsgPackNamesAndTypesReader(const FormatSettings & format_settings_);
-    NamesAndTypesList readSchema(ReadBuffer & in) const override;
+    NamesAndTypesList readSchema(ReadBuffer & in) override;
 
 private:
-    msgpack::object_handle readObject(PeekableReadBuffer & buf) const;
-    DataTypePtr getDataType(const msgpack::object & object) const;
+    msgpack::object_handle readObject(PeekableReadBuffer & buf);
+    DataTypePtr getDataType(const msgpack::object & object);
 
     UInt64 number_of_columns;
     UInt64 max_depth_for_schema_inference;

@@ -43,16 +43,16 @@ class BinaryWithNamesAndTypesSchemaReader : public FormatWithNamesAndTypesSchema
 public:
     BinaryWithNamesAndTypesSchemaReader();
 
-    Names readColumnNames(ReadBuffer & in) const override;
-    Names readDataTypeNames(ReadBuffer & in) const override;
+    Names readColumnNames(ReadBuffer & in) override;
+    Names readDataTypeNames(ReadBuffer & in) override;
 
 private:
-    DataTypes determineTypesFromData(ReadBuffer &) const override
+    DataTypes determineTypesFromData(ReadBuffer &) override
     {
         throw Exception{ErrorCodes::NOT_IMPLEMENTED, "Method determineTypesFromData is not implemented in BinaryWithNamesAndTypesSchemaReader"};
     }
 
-    std::vector<std::string> readRow(ReadBuffer & in) const;
+    std::vector<std::string> readRow(ReadBuffer & in);
 
     UInt64 read_columns;
 };

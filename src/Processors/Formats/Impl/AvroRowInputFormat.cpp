@@ -811,7 +811,7 @@ AvroSchemaReader::AvroSchemaReader(bool confluent_, const FormatSettings & forma
 {
 }
 
-NamesAndTypesList AvroSchemaReader::readSchema(ReadBuffer & in) const
+NamesAndTypesList AvroSchemaReader::readSchema(ReadBuffer & in)
 {
     avro::NodePtr root_node;
     if (confluent)
@@ -835,7 +835,7 @@ NamesAndTypesList AvroSchemaReader::readSchema(ReadBuffer & in) const
     return names_and_types;
 }
 
-DataTypePtr AvroSchemaReader::avroNodeToDataType(avro::NodePtr node) const
+DataTypePtr AvroSchemaReader::avroNodeToDataType(avro::NodePtr node)
 {
     switch (node->type())
     {
