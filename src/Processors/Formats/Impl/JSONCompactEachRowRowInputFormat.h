@@ -2,6 +2,7 @@
 
 #include <Core/Block.h>
 #include <Processors/Formats/RowInputFormatWithNamesAndTypes.h>
+#include <Processors/Formats/ISchemaReader.h>
 #include <Formats/FormatSettings.h>
 #include <Common/HashTable/HashMap.h>
 
@@ -10,13 +11,6 @@ namespace DB
 
 class ReadBuffer;
 
-class JSONCompactEachRowRowInputFormatHeader : public IInputFormatHeader
-{
-public:
-    JSONCompactEachRowRowInputFormatHeader(ReadBuffer & in);
-
-    void readPrefix() override;
-};
 
 /** A stream for reading data in a bunch of formats:
  *  - JSONCompactEachRow
@@ -37,19 +31,17 @@ public:
         bool yield_strings_,
         const FormatSettings & format_settings_);
 
-    JSONCompactEachRowRowInputFormat(
-        ReadBuffer & in_,
-        IInputFormatHeader & format_header_,
-        Params params_,
-        const FormatSettings & format_settings_,
-        bool with_names_,
-        bool yield_strings_);
-
     String getName() const override { return "JSONCompactEachRowRowInputFormat"; }
 
 private:
     bool allowSyncAfterError() const override { return true; }
     void syncAfterError() override;
+};
+
+class JSONCompactEachRowFormatReader : public FormatWithNamesAndTypesReader {
+public:
+    JSONCompactEachRowFormatReader(ReadBuffer & in_, bool yield_strings_, const FormatSettings & format_settings_);
+
 
     bool parseRowStartWithDiagnosticInfo(WriteBuffer & out) override;
     bool parseFieldDelimiterWithDiagnosticInfo(WriteBuffer & out) override;
@@ -61,7 +53,8 @@ private:
 
     bool readField(IColumn & column, const DataTypePtr & type, const SerializationPtr & serialization, bool is_last_file_column, const String & column_name) override;
 
-    void skipField(size_t file_column) override;
+    void skipField(size_t /*column_index*/) override { skipField(); }
+    void skipField();
     void skipHeaderRow();
     void skipNames() override { skipHeaderRow(); }
     void skipTypes() override { skipHeaderRow(); }
@@ -72,9 +65,21 @@ private:
     std::vector<String> readHeaderRow();
     std::vector<String> readNames() override { return readHeaderRow(); }
     std::vector<String> readTypes() override { return readHeaderRow(); }
-    String readFieldIntoString();
 
+    bool yieldStrings() const { return yield_strings; }
+private:
     bool yield_strings;
+};
+
+class JSONCompactEachRowRowSchemaReader : public FormatWithNamesAndTypesSchemaReader
+{
+public:
+    JSONCompactEachRowRowSchemaReader(ReadBuffer & in_, bool with_names_, bool with_types_, bool yield_strings_, const FormatSettings & format_settings_);
+
+private:
+    DataTypes readRowAndGetDataTypes() override;
+
+    JSONCompactEachRowFormatReader reader;
 };
 
 }

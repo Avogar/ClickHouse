@@ -1,10 +1,6 @@
 #pragma once
 
 #include <Storages/IStorage.h>
-#include <Processors/Formats/IInputFormatHeader.h>
-
-#include <Poco/File.h>
-#include <Poco/Path.h>
 
 #include <base/logger_useful.h>
 
@@ -56,10 +52,9 @@ public:
     {
         StorageID table_id;
         std::string format_name;
-        std::optional<IInputFormatHeader> format_header;
         std::optional<FormatSettings> format_settings;
         std::string compression_method;
-        ColumnsDescription columns;
+        const ColumnsDescription & columns;
         const ConstraintsDescription & constraints;
         const String & comment;
     };
@@ -92,8 +87,9 @@ protected:
 private:
     explicit StorageFile(CommonArguments args);
 
+    void setStorageMetadata(CommonArguments args);
+
     std::string format_name;
-    std::optional<IInputFormatHeader> format_header;
     // We use format settings from global context + CREATE query for File table
     // function -- in this case, format_settings is set.
     // For `file` table function, we use format settings from current user context,

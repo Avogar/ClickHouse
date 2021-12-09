@@ -563,6 +563,7 @@ void readStringUntilWhitespace(String & s, ReadBuffer & buf);
   */
 void readCSVString(String & s, ReadBuffer & buf, const FormatSettings::CSV & settings);
 
+void readCSVField(String & s, ReadBuffer & buf, const FormatSettings::CSV & settings);
 
 /// Read and append result to array of characters.
 template <typename Vector>
@@ -1386,4 +1387,7 @@ struct PcgDeserializer
 
 void readQuotedFieldIntoString(String & s, ReadBuffer & buf);
 
+void readJSONFieldIntoString(String & s, ReadBuffer & buf);
+
 }
+

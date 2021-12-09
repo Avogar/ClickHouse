@@ -76,7 +76,15 @@ BlockIO InterpreterDescribeQuery::execute()
     else if (table_expression.table_function)
     {
         TableFunctionPtr table_function_ptr = TableFunctionFactory::instance().get(table_expression.table_function, getContext());
-        columns = table_function_ptr->getActualTableStructure(getContext());
+        if (table_function_ptr->hasStaticStructure())
+            columns = table_function_ptr->getActualTableStructure(getContext());
+        else
+        {
+            /// If table function doesn't have static structure we should create
+            /// a storage to get columns description.
+            auto storage = table_function_ptr->execute(table_expression.table_function, getContext(), table_expression.dumpTree());
+            columns = storage->getInMemoryMetadataPtr()->columns;
+        }
     }
     else
     {

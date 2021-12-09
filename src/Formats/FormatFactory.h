@@ -6,6 +6,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <IO/BufferWithOwnMemory.h>
 #include <base/types.h>
+#include <Core/NamesAndTypes.h>
 
 #include <boost/noncopyable.hpp>
 
@@ -32,8 +33,12 @@ class IOutputFormat;
 struct RowInputFormatParams;
 struct RowOutputFormatParams;
 
+class ISchemaReader;
+class IExternalSchemaReader;
+using SchemaReaderPtr = std::shared_ptr<ISchemaReader>;
+using ExternalSchemaReaderPtr = std::shared_ptr<IExternalSchemaReader>;
+
 using InputFormatPtr = std::shared_ptr<IInputFormat>;
-using InputFormatHeaderPtr = std::shared_ptr<IInputFormatHeader>;
 using OutputFormatPtr = std::shared_ptr<IOutputFormat>;
 
 template <typename Allocator>
@@ -76,12 +81,6 @@ private:
             const RowInputFormatParams & params,
             const FormatSettings & settings)>;
 
-    using InputWithFormatHeaderProcessorCreator = std::function<InputFormatPtr(
-        ReadBuffer & buf,
-        IInputFormatHeader & format_header,
-        const RowInputFormatParams & params,
-        const FormatSettings & settings)>;
-
     using OutputCreator = std::function<OutputFormatPtr(
             WriteBuffer & buf,
             const Block & sample,
@@ -92,14 +91,17 @@ private:
     /// so in some cases there is no possibility to use parallel parsing.
     /// The checker should return true if parallel parsing should be disabled.
     using NonTrivialPrefixAndSuffixChecker = std::function<bool(ReadBuffer & buf)>;
+    
+    using SchemaReaderCreator = std::function<SchemaReaderPtr(ReadBuffer & in, const FormatSettings & settings, ContextPtr context)>;
+    using ExternalSchemaReaderCreator = std::function<ExternalSchemaReaderPtr(const FormatSettings & settings)>;
 
     struct Creators
     {
         InputCreator input_creator;
-        InputFormatHeaderCreator input_format_header_creator;
         OutputCreator output_creator;
-        InputWithFormatHeaderProcessorCreator input_with_format_header_processor_creator;
         FileSegmentationEngine file_segmentation_engine;
+        SchemaReaderCreator schema_reader_creator;
+        ExternalSchemaReaderCreator external_schema_reader_creator;
         bool supports_parallel_formatting{false};
         bool is_column_oriented{false};
         NonTrivialPrefixAndSuffixChecker non_trivial_prefix_and_suffix_checker;
@@ -126,21 +128,6 @@ public:
         UInt64 max_block_size,
         const std::optional<FormatSettings> & format_settings = std::nullopt) const;
 
-    InputFormatPtr getInputFormat(
-        const String & name,
-        ReadBuffer & buf,
-        IInputFormatHeader & format_header,
-        ContextConstPtr context,
-        UInt64 max_block_size,
-        const std::optional<FormatSettings> & format_settings = std::nullopt) const;
-
-    InputFormatHeaderPtr getInputFormatHeader(
-        const String & name,
-        ReadBuffer & buf,
-        ContextConstPtr context,
-        UInt64 max_block_size,
-        const std::optional<FormatSettings> & format_settings = std::nullopt) const;
-
     /// Checks all preconditions. Returns ordinary format if parallel formatting cannot be done.
     OutputFormatPtr getOutputFormatParallelIfPossible(
         const String & name,
@@ -163,9 +150,17 @@ public:
         ContextPtr context,
         const std::optional<FormatSettings> & format_settings = std::nullopt) const;
 
-    bool checkIfInputFormatSupportsFormatHeader(const String & name);
+    SchemaReaderPtr getSchemaReader(
+        const String & name,
+        ReadBuffer & buf,
+        ContextPtr context,
+        const std::optional<FormatSettings> & format_settings = std::nullopt) const;
 
-    void registerInputFormatHeader(const String & name, InputFormatHeaderCreator format_header_creator);
+    ExternalSchemaReaderPtr getExternalSchemaReader(
+        const String & name,
+        ContextPtr context,
+        const std::optional<FormatSettings> & format_settings = std::nullopt) const;
+
     void registerFileSegmentationEngine(const String & name, FileSegmentationEngine file_segmentation_engine);
 
     void registerNonTrivialPrefixAndSuffixChecker(const String & name, NonTrivialPrefixAndSuffixChecker non_trivial_prefix_and_suffix_checker);
@@ -173,12 +168,18 @@ public:
     /// Register format by its name.
     void registerInputFormat(const String & name, InputCreator input_creator);
     void registerOutputFormat(const String & name, OutputCreator output_creator);
-    void registerInputFormatWithFormatHeaderProcessor(const String & name, InputWithFormatHeaderProcessorCreator input_creator);
+
+    void registerSchemaReader(const String & name, SchemaReaderCreator schema_reader_creator);
+    void registerExternalSchemaReader(const String & name, ExternalSchemaReaderCreator external_schema_reader_creator);
 
     void markOutputFormatSupportsParallelFormatting(const String & name);
     void markFormatAsColumnOriented(const String & name);
 
     bool checkIfFormatIsColumnOriented(const String & name);
+
+    bool checkIfFormatHasSchemaReader(const String & name);
+    bool checkIfFormatHasExternalSchemaReader(const String & name);
+    bool checkIfFormatHasAnySchemaReader(const String & name);
 
     const FormatsDictionary & getAllFormats() const
     {
@@ -193,10 +194,6 @@ private:
 
     const Creators & getCreators(const String & name) const;
 
-    RowInputFormatParams getRowInputFormatParams(
-        UInt64 max_block_size, 
-        const FormatSettings & format_settings, 
-        const Settings & settings) const; 
 };
 
 }

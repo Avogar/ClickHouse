@@ -105,14 +105,20 @@ static size_t countIndicesForType(std::shared_ptr<arrow::DataType> type)
     return 1;
 }
 
+static void getFileReaderAndSchema(
+    ReadBuffer & in, std::unique_ptr<arrow::adapters::orc::ORCFileReader> & file_reader, std::shared_ptr<arrow::Schema> & schema, const FormatSettings & format_settings)
+{
+    THROW_ARROW_NOT_OK(arrow::adapters::orc::ORCFileReader::Open(asArrowFile(in, format_settings), arrow::default_memory_pool(), &file_reader));
+    THROW_ARROW_NOT_OK(file_reader->ReadSchema(&schema));
+}
+
 void ORCBlockInputFormat::prepareReader()
 {
-    THROW_ARROW_NOT_OK(arrow::adapters::orc::ORCFileReader::Open(asArrowFile(*in, format_settings), arrow::default_memory_pool(), &file_reader));
+    std::shared_ptr<arrow::Schema> schema;
+    getFileReaderAndSchema(*in, file_reader, schema, format_settings);
+
     stripe_total = file_reader->NumberOfStripes();
     stripe_current = 0;
-
-    std::shared_ptr<arrow::Schema> schema;
-    THROW_ARROW_NOT_OK(file_reader->ReadSchema(&schema));
 
     arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(getPort().getHeader(), "ORC", format_settings.orc.import_nested);
 
@@ -139,7 +145,20 @@ void ORCBlockInputFormat::prepareReader()
     }
 }
 
-void registerInputFormatORC(FormatFactory &factory)
+ORCSchemaReader::ORCSchemaReader(ReadBuffer & in_, const FormatSettings & format_settings_) : ISchemaReader(in_), format_settings(format_settings_)
+{
+}
+
+NamesAndTypesList ORCSchemaReader::readSchema()
+{
+    std::unique_ptr<arrow::adapters::orc::ORCFileReader> file_reader;
+    std::shared_ptr<arrow::Schema> schema;
+    getFileReaderAndSchema(in, file_reader, schema, format_settings);
+    auto header = ArrowColumnToCHColumn::arrowSchemaToCHHeader(*schema, "ORC");
+    return header.getNamesAndTypesList();
+}
+
+void registerInputFormatORC(FormatFactory & factory)
 {
     factory.registerInputFormat(
             "ORC",
@@ -151,6 +170,17 @@ void registerInputFormatORC(FormatFactory &factory)
                 return std::make_shared<ORCBlockInputFormat>(buf, sample, settings);
             });
     factory.markFormatAsColumnOriented("ORC");
+}
+
+void registerORCSchemaReader(FormatFactory & factory)
+{
+    factory.registerSchemaReader(
+        "ORC",
+        [](ReadBuffer & buf, const FormatSettings & settings, ContextPtr)
+        {
+            return std::make_shared<ORCSchemaReader>(buf, settings);
+        }
+        );
 }
 
 }
