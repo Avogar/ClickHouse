@@ -79,28 +79,31 @@ void ArrowBlockInputFormat::resetParser()
     record_batch_current = 0;
 }
 
+static std::shared_ptr<arrow::RecordBatchReader> createStreamReader(ReadBuffer & in)
+{
+    auto stream_reader_status = arrow::ipc::RecordBatchStreamReader::Open(std::make_unique<ArrowInputStreamFromReadBuffer>(in));
+    if (!stream_reader_status.ok())
+        throw Exception(ErrorCodes::UNKNOWN_EXCEPTION,
+                        "Error while opening a table: {}", stream_reader_status.status().ToString());
+    return *stream_reader_status;
+}
+
+static std::shared_ptr<arrow::ipc::RecordBatchFileReader> createFileReader(ReadBuffer & in, const FormatSettings & format_settings)
+{
+    auto file_reader_status = arrow::ipc::RecordBatchFileReader::Open(asArrowFile(in, format_settings));
+    if (!file_reader_status.ok())
+        throw Exception(ErrorCodes::UNKNOWN_EXCEPTION,
+            "Error while opening a table: {}", file_reader_status.status().ToString());
+    return *file_reader_status;
+}
+
+
 void ArrowBlockInputFormat::prepareReader()
 {
-    std::shared_ptr<arrow::Schema> schema;
-
     if (stream)
-    {
-        auto stream_reader_status = arrow::ipc::RecordBatchStreamReader::Open(std::make_unique<ArrowInputStreamFromReadBuffer>(*in));
-        if (!stream_reader_status.ok())
-            throw Exception(ErrorCodes::UNKNOWN_EXCEPTION,
-                "Error while opening a table: {}", stream_reader_status.status().ToString());
-        stream_reader = *stream_reader_status;
-        schema = stream_reader->schema();
-    }
+        stream_reader = createStreamReader(*in);
     else
-    {
-        auto file_reader_status = arrow::ipc::RecordBatchFileReader::Open(asArrowFile(*in, format_settings));
-        if (!file_reader_status.ok())
-            throw Exception(ErrorCodes::UNKNOWN_EXCEPTION,
-                "Error while opening a table: {}", file_reader_status.status().ToString());
-        file_reader = *file_reader_status;
-        schema = file_reader->schema();
-    }
+        file_reader = createFileReader(*in, format_settings);
 
     arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(getPort().getHeader(), "Arrow", format_settings.arrow.import_nested);
 
@@ -110,6 +113,24 @@ void ArrowBlockInputFormat::prepareReader()
         record_batch_total = file_reader->num_record_batches();
 
     record_batch_current = 0;
+}
+
+ArrowSchemaReader::ArrowSchemaReader(ReadBuffer & in_, bool stream_, const FormatSettings & format_settings_)
+    : ISchemaReader(in_), stream(stream_), format_settings(format_settings_)
+{
+}
+
+NamesAndTypesList ArrowSchemaReader::readSchema()
+{
+    std::shared_ptr<arrow::Schema> schema;
+
+    if (stream)
+        schema = createStreamReader(in)->schema();
+    else
+        schema = createFileReader(in, format_settings)->schema();
+
+    auto header = ArrowColumnToCHColumn::arrowSchemaToCHHeader(*schema, stream ? "ArrowStream" : "Arrow");
+    return header.getNamesAndTypesList();
 }
 
 void registerInputFormatArrow(FormatFactory & factory)
@@ -135,6 +156,20 @@ void registerInputFormatArrow(FormatFactory & factory)
         });
 }
 
+void registerArrowSchemaReader(FormatFactory & factory)
+{
+    factory.registerSchemaReader(
+        "Arrow",
+        [](ReadBuffer & buf, const FormatSettings & settings, ContextPtr)
+        {
+            return std::make_shared<ArrowSchemaReader>(buf, false, settings);
+        });
+    factory.registerSchemaReader(
+        "ArrowStream",
+        [](ReadBuffer & buf, const FormatSettings & settings, ContextPtr)
+        {
+            return std::make_shared<ArrowSchemaReader>(buf, true, settings);
+        });}
 }
 #else
 
@@ -144,6 +179,8 @@ class FormatFactory;
 void registerInputFormatArrow(FormatFactory &)
 {
 }
+
+void registerArrowSchemaReader(FormatFactory &) {}
 }
 
 #endif
