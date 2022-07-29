@@ -48,7 +48,7 @@ protected:
 /** Computes the hash from the data to write and passes it to the specified WriteBuffer.
   * The buffer of the nested WriteBuffer is used as the main buffer.
   */
-class HashingWriteBuffer : public IHashingBuffer<WriteBuffer>
+class HashingWriteBuffer : public IHashingBuffer<WriteBufferWithoutFinalize>
 {
 private:
     WriteBuffer & out;
@@ -69,7 +69,7 @@ public:
     explicit HashingWriteBuffer(
         WriteBuffer & out_,
         size_t block_size_ = DBMS_DEFAULT_HASHING_BLOCK_SIZE)
-        : IHashingBuffer<DB::WriteBuffer>(block_size_), out(out_)
+        : IHashingBuffer<DB::WriteBufferWithoutFinalize>(block_size_), out(out_)
     {
         out.next(); /// If something has already been written to `out` before us, we will not let the remains of this data affect the hash.
         working_buffer = out.buffer();
@@ -80,7 +80,7 @@ public:
     uint128 getHash()
     {
         next();
-        return IHashingBuffer<WriteBuffer>::getHash();
+        return IHashingBuffer<WriteBufferWithoutFinalize>::getHash();
     }
 };
 

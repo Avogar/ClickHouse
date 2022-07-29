@@ -9,7 +9,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-WriteBuffer PullingOutputFormat::out(nullptr, 0);
+WriteBuffer PullingOutputFormat::out(nullptr, 0, false);
 
 void PullingOutputFormat::consume(Chunk chunk)
 {

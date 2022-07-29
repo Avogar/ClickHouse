@@ -260,6 +260,9 @@ void MergeTreeDataPartWriterCompact::fillDataChecksums(IMergeTreeDataPart::Check
 
 void MergeTreeDataPartWriterCompact::finishDataSerialization(bool sync)
 {
+    for (auto & [_, stream] : compressed_streams)
+        stream->compressed_buf.finalize();
+
     plain_file->finalize();
     marks_file->finalize();
     if (sync)
@@ -385,6 +388,12 @@ void MergeTreeDataPartWriterCompact::finish(bool sync)
         finishPrimaryIndexSerialization(sync);
 
     finishSkipIndicesSerialization(sync);
+}
+
+MergeTreeDataPartWriterCompact::~MergeTreeDataPartWriterCompact()
+{
+//    plain_file->finalize();
+//    marks_file->finalize();
 }
 
 }

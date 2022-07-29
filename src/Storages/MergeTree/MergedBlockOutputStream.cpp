@@ -143,7 +143,15 @@ MergedBlockOutputStream::Finalizer MergedBlockOutputStream::finalizePartAsync(
         checksums = std::move(*additional_column_checksums);
 
     /// Finish columns serialization.
-    writer->fillChecksums(checksums);
+    try
+    {
+        writer->fillChecksums(checksums);
+    }
+    catch (...)
+    {
+        writer->finish(false);
+        throw;
+    }
 
     LOG_TRACE(&Poco::Logger::get("MergedBlockOutputStream"), "filled checksums {}", new_part->getNameWithState());
 

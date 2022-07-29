@@ -163,7 +163,7 @@ public:
 
         auto * begin = reinterpret_cast<char *>(result_column_data.data());
 
-        WriteBuffer buffer(begin, result_column_data.size());
+        WriteBuffer buffer(begin, result_column_data.size(), false);
 
         using TimeType = DateTypeToTimeType<DataType>;
         callOnDatePartWriter<TimeType>(date_part, [&](const auto & writer)

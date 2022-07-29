@@ -29,6 +29,7 @@ void MergeTreeDataPartWriterOnDisk::Stream::finalize()
     if (!is_prefinalized)
         preFinalize();
 
+    compressed_buf.finalize();
     plain_file->finalize();
     marks_file->finalize();
 }

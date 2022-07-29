@@ -77,7 +77,9 @@ public:
         LOG_TEST(&Poco::Logger::get("ParallelFormattingOutputFormat"), "Parallel formatting is being used");
 
         NullWriteBuffer buf;
-        save_totals_and_extremes_in_statistics = internal_formatter_creator(buf)->areTotalsAndExtremesUsedInFinalize();
+        auto tmp_formatter = internal_formatter_creator(buf);
+        save_totals_and_extremes_in_statistics = tmp_formatter->areTotalsAndExtremesUsedInFinalize();
+        tmp_formatter->finalize();
 
         /// Just heuristic. We need one thread for collecting, one thread for receiving chunks
         /// and n threads for formatting.

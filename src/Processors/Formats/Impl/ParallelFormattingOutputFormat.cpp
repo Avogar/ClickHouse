@@ -168,12 +168,13 @@ namespace DB
             unit.segment.resize(DBMS_DEFAULT_BUFFER_SIZE);
 
             unit.actual_memory_size = 0;
-            BufferWithOutsideMemory<WriteBuffer> out_buffer(unit.segment);
+            BufferWithOutsideMemory<WriteBufferWithoutFinalize> out_buffer(unit.segment);
 
             /// The second invocation won't release memory, only set size equals to 0.
             unit.segment.resize(0);
 
             auto formatter = internal_formatter_creator(out_buffer);
+            SCOPE_EXIT(formatter->finalizeBuffers());
             formatter->setRowsReadBefore(first_row_num);
 
             switch (unit.type)

@@ -566,6 +566,7 @@ void MergeTreeDataPartWriterWide::fillDataChecksums(IMergeTreeDataPart::Checksum
 
 void MergeTreeDataPartWriterWide::finishDataSerialization(bool sync)
 {
+    LOG_DEBUG(&Poco::Logger::get("MergeTreeDataPartWriterWide"), "finishDataSerialization");
     for (auto & stream : column_streams)
     {
         stream.second->finalize();
@@ -710,5 +711,11 @@ void MergeTreeDataPartWriterWide::adjustLastMarkIfNeedAndFlushToDisk(size_t new_
         }
     }
 }
+
+MergeTreeDataPartWriterWide::~MergeTreeDataPartWriterWide()
+{
+//    for (auto & stream : column_streams)
+//        stream.second->finalize();
+};
 
 }

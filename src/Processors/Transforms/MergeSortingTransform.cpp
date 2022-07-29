@@ -50,8 +50,8 @@ public:
     {
         if (out_stream)
         {
-            compressed_buf_out.next();
-            file_buf_out.next();
+            compressed_buf_out.finalize();
+            file_buf_out.finalize();
             LOG_INFO(log, "Done writing part of data into temporary file {}", path);
 
             out_stream.reset();

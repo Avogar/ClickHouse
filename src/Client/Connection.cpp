@@ -199,9 +199,13 @@ void Connection::connect(const ConnectionTimeouts & timeouts)
 
 void Connection::disconnect()
 {
+    if (maybe_compressed_out)
+        maybe_compressed_out->finalize();
     maybe_compressed_out = nullptr;
     in = nullptr;
     last_input_packet_type.reset();
+    if (out)
+        out->finalize();
     out = nullptr; // can write to socket
     if (socket)
         socket->close();
@@ -559,6 +563,8 @@ void Connection::sendQuery(
     writeStringBinary(query, *out);
 
     maybe_compressed_in.reset();
+    if (is_compressed)
+        maybe_compressed_out->finalize();
     maybe_compressed_out.reset();
     block_in.reset();
     block_logs_in.reset();
@@ -590,7 +596,10 @@ void Connection::sendData(const Block & block, const String & name, bool scalar)
     if (!block_out)
     {
         if (compression == Protocol::Compression::Enable)
+        {
             maybe_compressed_out = std::make_unique<CompressedWriteBuffer>(*out, compression_codec);
+            is_compressed = true;
+        }
         else
             maybe_compressed_out = out;
 
@@ -607,6 +616,8 @@ void Connection::sendData(const Block & block, const String & name, bool scalar)
 
     block_out->write(block);
     maybe_compressed_out->next();
+    if (!block && is_compressed)
+        maybe_compressed_out->finalize();
     out->next();
 
     if (throttler)

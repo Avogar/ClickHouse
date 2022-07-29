@@ -154,6 +154,7 @@ void FileChecker::save() const
 
         writeCString("}}", *out);
         out->next();
+        out->finalize();
     }
 
     if (disk)
