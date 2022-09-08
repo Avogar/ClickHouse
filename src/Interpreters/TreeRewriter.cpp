@@ -1093,6 +1093,8 @@ void TreeRewriterResult::collectUsedColumns(const ASTPtr & query, bool is_select
     {
         const String & column_name = it->name;
         unknown_required_source_columns.erase(column_name);
+        for (const auto & subcolumn : it->type->getSubcolumnNames())
+            unknown_required_source_columns.erase(column_name + "." + subcolumn);
 
         if (!required.contains(column_name))
             it = source_columns.erase(it);

@@ -349,10 +349,12 @@ namespace detail
         void callWithRedirects(Poco::Net::HTTPResponse & response, const String & method_, bool throw_on_all_errors = false)
         {
             call(response, method_, throw_on_all_errors);
+            LOG_DEBUG(&Poco::Logger::get("callWithRedirects"), "1) URI: {}", uri.toString());
 
             while (isRedirect(response.getStatus()))
             {
                 Poco::URI uri_redirect(response.get("Location"));
+                LOG_DEBUG(&Poco::Logger::get("callWithRedirects"), "URI: {}", uri_redirect.toString());
                 if (remote_host_filter)
                     remote_host_filter->checkURL(uri_redirect);
 
