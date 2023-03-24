@@ -39,6 +39,8 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/case_conv.hpp>
 
+#include <Common/logger_useful.h>
+
 /// UINT16 and UINT32 are processed separately, see comments in readColumnFromArrowColumn.
 #define FOR_ARROW_NUMERIC_TYPES(M) \
         M(arrow::Type::UINT8, DB::UInt8) \
@@ -105,6 +107,7 @@ static ColumnWithTypeAndName readColumnWithNumericData(std::shared_ptr<arrow::Ch
 template <typename ArrowArray>
 static ColumnWithTypeAndName readColumnWithStringData(std::shared_ptr<arrow::ChunkedArray> & arrow_column, const String & column_name)
 {
+    readColumnWithNumericData<Int128>(arrow_column, column_name);
     auto internal_type = std::make_shared<DataTypeString>();
     auto internal_column = internal_type->createColumn();
     PaddedPODArray<UInt8> & column_chars_t = assert_cast<ColumnString &>(*internal_column).getChars();
@@ -163,6 +166,34 @@ static ColumnWithTypeAndName readColumnWithFixedStringData(std::shared_ptr<arrow
         column_chars_t.insert_assume_reserved(raw_data, raw_data + fixed_len * chunk.length());
     }
     return {std::move(internal_column), std::move(internal_type), column_name};
+}
+
+template <typename ColumnType>
+static ColumnWithTypeAndName readColumnWithBigIntegerData(std::shared_ptr<arrow::ChunkedArray> & arrow_column, const String & column_name, const DataTypePtr & column_type)
+{
+    const auto * fixed_type = assert_cast<arrow::FixedSizeBinaryType *>(arrow_column->type().get());
+    size_t fixed_len = fixed_type->byte_width();
+    static constexpr size_t value_size = sizeof(typename ColumnType::ValueType);
+    if (fixed_len != value_size)
+        throw Exception(
+            ErrorCodes::BAD_ARGUMENTS,
+            "Cannot insert data into {} column from fixed size binary, expected data with size {}, got {}",
+            column_type->getName(),
+            value_size,
+            fixed_len);
+
+    auto internal_column = column_type->createColumn();
+    auto & data = assert_cast<ColumnType &>(*internal_column).getData();
+    data.reserve(arrow_column->length());
+
+    for (int chunk_i = 0, num_chunks = arrow_column->num_chunks(); chunk_i < num_chunks; ++chunk_i)
+    {
+        arrow::FixedSizeBinaryArray & chunk = dynamic_cast<arrow::FixedSizeBinaryArray &>(*(arrow_column->chunk(chunk_i)));
+        const auto * raw_data = reinterpret_cast<const typename ColumnType::ValueType *>(chunk.raw_values());
+        data.insert_assume_reserved(raw_data, raw_data + chunk.length());
+    }
+
+    return {std::move(internal_column), column_type, column_name};
 }
 
 static ColumnWithTypeAndName readColumnWithBooleanData(std::shared_ptr<arrow::ChunkedArray> & arrow_column, const String & column_name)
@@ -566,7 +597,8 @@ static ColumnWithTypeAndName readColumnFromArrowColumn(
     bool allow_null_type,
     bool skip_columns_with_unsupported_types,
     bool & skipped,
-    DataTypePtr type_hint = nullptr)
+    DataTypePtr type_hint = nullptr,
+    bool is_map_nested = false)
 {
     if (!is_nullable && (arrow_column->null_count() || (type_hint && type_hint->isNullable())) && arrow_column->type()->id() != arrow::Type::LIST
         && arrow_column->type()->id() != arrow::Type::MAP && arrow_column->type()->id() != arrow::Type::STRUCT &&
@@ -594,7 +626,25 @@ static ColumnWithTypeAndName readColumnFromArrowColumn(
             return readColumnWithStringData<arrow::BinaryArray>(arrow_column, column_name);
         }
         case arrow::Type::FIXED_SIZE_BINARY:
+        {
+            if (type_hint)
+            {
+                switch (type_hint->getTypeId())
+                {
+                    case TypeIndex::Int128:
+                        return readColumnWithBigIntegerData<ColumnInt128>(arrow_column, column_name, type_hint);
+                    case TypeIndex::UInt128:
+                        return readColumnWithBigIntegerData<ColumnUInt128>(arrow_column, column_name, type_hint);
+                    case TypeIndex::Int256:
+                        return readColumnWithBigIntegerData<ColumnInt256>(arrow_column, column_name, type_hint);
+                    case TypeIndex::UInt256:
+                        return readColumnWithBigIntegerData<ColumnUInt256>(arrow_column, column_name, type_hint);
+                    default:;
+                }
+            }
+
             return readColumnWithFixedStringData(arrow_column, column_name);
+        }
         case arrow::Type::LARGE_BINARY:
         case arrow::Type::LARGE_STRING:
             return readColumnWithStringData<arrow::LargeBinaryArray>(arrow_column, column_name);
@@ -637,7 +687,7 @@ static ColumnWithTypeAndName readColumnFromArrowColumn(
                     nested_type_hint = assert_cast<const DataTypeArray *>(map_type_hint->getNestedType().get())->getNestedType();
             }
             auto arrow_nested_column = getNestedArrowColumn(arrow_column);
-            auto nested_column = readColumnFromArrowColumn(arrow_nested_column, column_name, format_name, false, dictionary_infos, allow_null_type, skip_columns_with_unsupported_types, skipped, nested_type_hint);
+            auto nested_column = readColumnFromArrowColumn(arrow_nested_column, column_name, format_name, false, dictionary_infos, allow_null_type, skip_columns_with_unsupported_types, skipped, nested_type_hint, true);
             if (skipped)
                 return {};
 
@@ -684,13 +734,14 @@ static ColumnWithTypeAndName readColumnFromArrowColumn(
             std::vector<String> tuple_names;
             const auto * tuple_type_hint = type_hint ? typeid_cast<const DataTypeTuple *>(type_hint.get()) : nullptr;
 
+
             for (int i = 0; i != arrow_struct_type->num_fields(); ++i)
             {
                 auto field_name = arrow_struct_type->field(i)->name();
                 DataTypePtr nested_type_hint;
                 if (tuple_type_hint)
                 {
-                    if (tuple_type_hint->haveExplicitNames())
+                    if (tuple_type_hint->haveExplicitNames() && !is_map_nested)
                     {
                         auto pos = tuple_type_hint->tryGetPositionByName(field_name);
                         if (pos)

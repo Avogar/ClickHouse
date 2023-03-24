@@ -406,13 +406,13 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
         {
             const auto & map_type = assert_cast<const DataTypeMap &>(*data_type);
             const auto & keys_type = map_type.getKeyType();
-            if (!isStringOrFixedString(keys_type))
-                throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Avro Maps support only keys with type String, got {}", keys_type->getName());
+            auto keys_serialization = keys_type->getDefaultSerialization();
 
-            auto keys_serializer = [](const IColumn & column, size_t row_num, avro::Encoder & encoder)
+            auto keys_serializer = [keys_serialization, this](const IColumn & column, size_t row_num, avro::Encoder & encoder)
             {
-                const std::string_view & s = column.getDataAt(row_num).toView();
-                encoder.encodeString(std::string(s));
+                WriteBufferFromOwnString buf;
+                keys_serialization->serializeText(column, row_num, buf, settings);
+                encoder.encodeString(buf.str());
             };
 
             const auto & values_type = map_type.getValueType();
@@ -450,8 +450,8 @@ AvroSerializer::SchemaWithSerializeFn AvroSerializer::createSchemaWithSerializeF
 }
 
 
-AvroSerializer::AvroSerializer(const ColumnsWithTypeAndName & columns, std::unique_ptr<AvroSerializerTraits> traits_)
-    : traits(std::move(traits_))
+AvroSerializer::AvroSerializer(const ColumnsWithTypeAndName & columns, std::unique_ptr<AvroSerializerTraits> traits_, const FormatSettings & settings_)
+    : traits(std::move(traits_)), settings(settings_)
 {
     avro::RecordSchema record_schema("row");
 
@@ -507,7 +507,7 @@ AvroRowOutputFormat::AvroRowOutputFormat(
     WriteBuffer & out_, const Block & header_, const FormatSettings & settings_)
     : IRowOutputFormat(header_, out_)
     , settings(settings_)
-    , serializer(header_.getColumnsWithTypeAndName(), std::make_unique<AvroSerializerTraits>(settings))
+    , serializer(header_.getColumnsWithTypeAndName(), std::make_unique<AvroSerializerTraits>(settings), settings)
 {
 }
 
