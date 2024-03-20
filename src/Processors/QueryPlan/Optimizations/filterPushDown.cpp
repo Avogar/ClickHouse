@@ -227,6 +227,12 @@ size_t tryPushDownFilter(QueryPlan::Node * parent_node, QueryPlan::Nodes & nodes
         /// of the grouping sets, we could not push the filter down.
         if (aggregating->isGroupingSets())
         {
+            /// Don't push down filter if group_by_use_nulls=1, because
+            /// types of expressions in grouping sets can change their Nullability
+            /// and functions in pushed down filter can get arguments with not
+            /// expected type. See examples in https://github.com/ClickHouse/ClickHouse/issues/60538#issuecomment-2009630244.
+            if (aggregating->useNullsInGroupBy())
+                return 0;
 
             const auto & actions = filter->getExpression();
             const auto & filter_node = actions->findInOutputs(filter->getFilterColumnName());
