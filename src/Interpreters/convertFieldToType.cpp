@@ -17,6 +17,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <DataTypes/DataTypeVariant.h>
+#include <DataTypes/DataTypeDynamic.h>
 
 #include <Core/AccurateComparison.h>
 
@@ -26,6 +27,7 @@
 #include <Common/FieldVisitorToString.h>
 #include <Common/FieldVisitorConvertToNumber.h>
 #include <Common/DateLUT.h>
+#include <Common/checkStackSize.h>
 
 
 namespace DB
@@ -165,6 +167,8 @@ Field convertDecimalType(const Field & from, const To & type)
 
 Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const IDataType * from_type_hint)
 {
+    checkStackSize();
+
     if (from_type_hint && from_type_hint->equals(type))
     {
         return src;
@@ -512,6 +516,11 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
         auto col = type_variant->createColumn();
         if (col->tryInsert(src))
             return src;
+    }
+    else if (isDynamic(type))
+    {
+        /// We can insert any field to Dynamic column.
+        return src;
     }
 
     /// Conversion from string by parsing.

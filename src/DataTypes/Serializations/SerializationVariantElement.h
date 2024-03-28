@@ -59,12 +59,6 @@ public:
         DeserializeBinaryBulkStatePtr & state,
         SubstreamsCache * cache) const override;
 
-private:
-    friend SerializationVariant;
-
-    void addVariantToPath(SubstreamPath & path) const;
-    void removeVariantFromPath(SubstreamPath & path) const;
-
     struct VariantSubcolumnCreator : public ISubcolumnCreator
     {
         const ColumnPtr local_discriminators;
@@ -82,6 +76,11 @@ private:
         ColumnPtr create(const ColumnPtr & prev) const override;
         SerializationPtr create(const SerializationPtr & prev) const override;
     };
+private:
+    friend SerializationVariant;
+
+    void addVariantToPath(SubstreamPath & path) const;
+    void removeVariantFromPath(SubstreamPath & path) const;
 };
 
 }

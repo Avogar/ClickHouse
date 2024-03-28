@@ -175,18 +175,30 @@ public:
     bool isDefaultAt(size_t n) const override;
     bool isNullAt(size_t n) const override;
     StringRef getDataAt(size_t n) const override;
+
     void insertData(const char * pos, size_t length) override;
     void insert(const Field & x) override;
     bool tryInsert(const Field & x) override;
-    void insertIntoVariant(const Field & x, Discriminator global_discr);
+
     void insertFrom(const IColumn & src_, size_t n) override;
-    void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
-    void insertManyFrom(const IColumn & src, size_t position, size_t length) override;
+    void insertRangeFrom(const IColumn & src_, size_t start, size_t length) override;
+    void insertManyFrom(const IColumn & src_, size_t position, size_t length) override;
+
+    void insertFrom(const IColumn & src_, size_t n, const std::vector<ColumnVariant::Discriminator> & global_discriminators_mapping);
+    void insertRangeFrom(const IColumn & src_, size_t start, size_t length, const std::vector<ColumnVariant::Discriminator> & global_discriminators_mapping);
+    void insertManyFrom(const IColumn & src_, size_t position, size_t length, const std::vector<ColumnVariant::Discriminator> & global_discriminators_mapping);
+
+    void insertIntoVariantFrom(Discriminator global_discr, const IColumn & src_, size_t n);
+    void insertRangeIntoVariantFrom(Discriminator global_discr, const IColumn & src_, size_t start, size_t length);
+    void insertManyIntoVariantFrom(Discriminator global_discr, const IColumn & src_, size_t position, size_t length);
+
     void insertDefault() override;
     void insertManyDefaults(size_t length) override;
+
     void popBack(size_t n) override;
     StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const override;
     const char * deserializeAndInsertFromArena(const char * pos) override;
+    const char * deserializeVariantAndInsertFromArena(Discriminator global_discr, const char * pos);
     const char * skipSerializedInArena(const char * pos) const override;
     void updateHashWithValue(size_t n, SipHash & hash) const override;
     void updateWeakHash32(WeakHash32 & hash) const override;
@@ -282,7 +294,19 @@ public:
     void applyNullMap(const ColumnVector<UInt8>::Container & null_map);
     void applyNegatedNullMap(const ColumnVector<UInt8>::Container & null_map);
 
+    /// Extend current column with new variants. Change global discriminators of current variants to the new
+    /// according to the mapping and add new variants with new global discriminators.
+    /// This extension doesn't rewrite any data, just adds new empty variants and modifies global/local discriminators matching.
+    void extend(const std::vector<Discriminator> & old_to_new_global_discriminators, std::vector<std::pair<MutableColumnPtr, Discriminator>> && new_variants_and_discriminators);
+
+    bool hasDynamicStructure() const override;
+    void takeDynamicStructureFromSourceColumns(const Columns & source_columns) override;
+
 private:
+    void insertFromImpl(const IColumn & src_, size_t n, const std::vector<ColumnVariant::Discriminator> * global_discriminators_mapping);
+    void insertRangeFromImpl(const IColumn & src_, size_t start, size_t length, const std::vector<ColumnVariant::Discriminator> * global_discriminators_mapping);
+    void insertManyFromImpl(const IColumn & src_, size_t position, size_t length, const std::vector<ColumnVariant::Discriminator> * global_discriminators_mapping);
+
     void initIdentityGlobalToLocalDiscriminatorsMapping();
 
     template <bool inverted>

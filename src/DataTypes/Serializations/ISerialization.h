@@ -160,6 +160,9 @@ public:
             VariantElements,
             VariantElement,
 
+            DynamicStructure,
+            DynamicData,
+
             Regular,
         };
 

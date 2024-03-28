@@ -45,9 +45,17 @@ private:
 
     void addStreams(
         const NameAndTypePair & name_and_type,
-        const SerializationPtr & serialization,
-        const ReadBufferFromFileBase::ProfileCallback & profile_callback,
-        clockid_t clock_type);
+        const SerializationPtr & serialization);
+
+    ReadBuffer * getStream(
+        bool seek_to_start,
+        const ISerialization::SubstreamPath & substream_path,
+        const MergeTreeDataPartChecksums & checksums,
+        const NameAndTypePair & name_and_type,
+        size_t from_mark,
+        bool seek_to_mark,
+        size_t current_task_last_mark,
+        ISerialization::SubstreamsCache & cache);
 
     void readData(
         const NameAndTypePair & name_and_type, const SerializationPtr & serialization, ColumnPtr & column,
@@ -73,6 +81,8 @@ private:
     std::unordered_map<String, ISerialization::SubstreamsCache> caches;
     std::unordered_set<std::string> prefetched_streams;
     ssize_t prefetched_from_mark = -1;
+    ReadBufferFromFileBase::ProfileCallback profile_callback;
+    clockid_t clock_type;
 };
 
 }

@@ -26,6 +26,7 @@
 #include <DataTypes/ObjectUtils.h>
 #include <DataTypes/DataTypeNested.h>
 #include <DataTypes/DataTypeVariant.h>
+#include <DataTypes/DataTypeDynamic.h>
 #include <DataTypes/Serializations/SerializationDecimal.h>
 #include <Formats/FormatSettings.h>
 #include <Columns/ColumnString.h>
@@ -39,6 +40,7 @@
 #include <Columns/ColumnObject.h>
 #include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnVariant.h>
+#include <Columns/ColumnDynamic.h>
 #include <Columns/ColumnStringHelpers.h>
 #include <Common/assert_cast.h>
 #include <Common/Concepts.h>
@@ -4197,6 +4199,54 @@ private:
         return createColumnToVariantWrapper(from_type, assert_cast<const DataTypeVariant &>(*to_type));
     }
 
+    WrapperType createDynamicToColumnWrapper(const DataTypePtr & to_type) const
+    {
+        return [this, to_type]
+               (ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, const ColumnNullable * col_nullable, size_t input_rows_count) -> ColumnPtr
+        {
+            const auto & column_dynamic = assert_cast<const ColumnDynamic &>(*arguments.front().column.get());
+            const auto & variant_info = column_dynamic.getVariantInfo();
+            auto variant_wrapper = createVariantToColumnWrapper(assert_cast<const DataTypeVariant &>(*variant_info.variant_type), to_type);
+            ColumnsWithTypeAndName args = {ColumnWithTypeAndName(column_dynamic.getVariantColumnPtr(), variant_info.variant_type, "")};
+            return variant_wrapper(args, result_type, col_nullable, input_rows_count);
+        };
+    }
+
+    WrapperType createColumnToDynamicWrapper(const DataTypePtr & from_type) const
+    {
+        if (isVariant(from_type))
+        {
+            return [from_type]
+                   (ColumnsWithTypeAndName & arguments, const DataTypePtr &, const ColumnNullable *, size_t) -> ColumnPtr
+            {
+                return ColumnDynamic::create(arguments.front().column, from_type);
+            };
+        }
+
+        auto variant_type = std::make_shared<DataTypeVariant>(DataTypes{removeNullableOrLowCardinalityNullable(from_type)});
+        auto variant_wrapper = createColumnToVariantWrapper(from_type, *variant_type);
+        return [variant_wrapper, variant_type]
+               (ColumnsWithTypeAndName & arguments, const DataTypePtr &, const ColumnNullable * col_nullable, size_t input_rows_count) -> ColumnPtr
+        {
+            auto variant_res = variant_wrapper(arguments, variant_type, col_nullable, input_rows_count);
+            return ColumnDynamic::create(variant_res, variant_type);
+        };
+    }
+
+    /// Wrapper for conversion to/from Dynamic type
+    WrapperType createDynamicWrapper(const DataTypePtr & from_type, const DataTypePtr & to_type) const
+    {
+        if (const auto * from_dynamic = checkAndGetDataType<DataTypeDynamic>(from_type.get()))
+        {
+            if (const auto * to_dynamic = checkAndGetDataType<DataTypeDynamic>(to_type.get()))
+                return createIdentityWrapper(from_type);
+
+            return createDynamicToColumnWrapper(to_type);
+        }
+
+        return createColumnToDynamicWrapper(from_type);
+    }
+
     template <typename FieldType>
     WrapperType createEnumWrapper(const DataTypePtr & from_type, const DataTypeEnum<FieldType> * to_type) const
     {
@@ -4376,8 +4426,11 @@ private:
 
     WrapperType prepareUnpackDictionaries(const DataTypePtr & from_type, const DataTypePtr & to_type) const
     {
-        /// Conversion from/to Variant data type is processed in a special way.
+        /// Conversion from/to Variant/Dynamic data type is processed in a special way.
         /// We don't need to remove LowCardinality/Nullable.
+        if (isDynamic(to_type) || isDynamic(from_type))
+            return createDynamicWrapper(from_type, to_type);
+
         if (isVariant(to_type) || isVariant(from_type))
             return createVariantWrapper(from_type, to_type);
 

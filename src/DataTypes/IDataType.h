@@ -313,6 +313,7 @@ public:
 
     /// Object, Array(Object), Tuple(..., Object, ...)
     virtual bool hasDynamicSubcolumns() const { return false; }
+    virtual bool hasDynamicSubcolumn(std::string_view /*subcolumn_name*/) const { return false; }
 
     /// Updates avg_value_size_hint for newly read column. Uses to optimize deserialization. Zero expected for first column.
     static void updateAvgValueSizeHint(const IColumn & column, double & avg_value_size_hint);
@@ -329,16 +330,25 @@ protected:
     mutable SerializationPtr custom_serialization;
 
 public:
+    bool hasCustomName() const { return static_cast<bool>(custom_name.get()); }
     const IDataTypeCustomName * getCustomName() const { return custom_name.get(); }
     const ISerialization * getCustomSerialization() const { return custom_serialization.get(); }
 
-private:
-    template <typename Ptr>
-    Ptr getForSubcolumn(
+protected:
+    static std::unique_ptr<SubstreamData> getSubcolumnData(
         std::string_view subcolumn_name,
         const SubstreamData & data,
-        Ptr SubstreamData::*member,
-        bool throw_if_null) const;
+        bool throw_if_null);
+
+    virtual std::unique_ptr<SubstreamData> getDynamicSubcolumnData(
+        std::string_view /*subcolumn_name*/,
+        const SubstreamData & /*data*/,
+        bool throw_if_null) const
+    {
+        if (throw_if_null)
+            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method getDynamicSubcolumnData() is not implemented for type {}", getName());
+        return nullptr;
+    }
 };
 
 
@@ -423,6 +433,7 @@ struct WhichDataType
     constexpr bool isLowCardinality() const { return idx == TypeIndex::LowCardinality; }
 
     constexpr bool isVariant() const { return idx == TypeIndex::Variant; }
+    constexpr bool isDynamic() const { return idx == TypeIndex::Dynamic; }
 };
 
 /// IDataType helpers (alternative for IDataType virtual methods with single point of truth)
@@ -483,6 +494,7 @@ bool isMap(TYPE data_type); \
 bool isInterval(TYPE data_type); \
 bool isObject(TYPE data_type); \
 bool isVariant(TYPE data_type); \
+bool isDynamic(TYPE data_type); \
 bool isNothing(TYPE data_type); \
 \
 bool isColumnedAsNumber(TYPE data_type); \
