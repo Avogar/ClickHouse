@@ -97,7 +97,6 @@ void MergeTreeDataPartWriterWide::initStreamsIfNeeded(const DB::Block & block)
         return;
 
     block_sample = block.cloneEmpty();
-    const auto & columns = metadata_snapshot->getColumns();
     auto storage_snapshot = std::make_shared<StorageSnapshot>(data_part->storage, metadata_snapshot);
     for (const auto & column : columns_list)
     {

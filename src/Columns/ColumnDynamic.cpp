@@ -18,6 +18,7 @@ namespace DB
 ColumnDynamic::ColumnDynamic()
 {
     variant_info.variant_type = std::make_shared<DataTypeVariant>(DataTypes{});
+    variant_info.variant_name = variant_info.variant_type->getName();
     variant_column = variant_info.variant_type->createColumn();
 }
 
@@ -29,6 +30,7 @@ ColumnDynamic::MutablePtr ColumnDynamic::create(MutableColumnPtr variant_column,
 {
     VariantInfo variant_info;
     variant_info.variant_type = variant_type;
+    variant_info.variant_name = variant_type->getName();
     const auto & variants = assert_cast<const DataTypeVariant &>(*variant_type).getVariants();
     variant_info.variant_names.reserve(variants.size());
     variant_info.variant_name_to_discriminator.reserve(variants.size());
@@ -90,9 +92,11 @@ bool ColumnDynamic::addNewVariant(const DB::DataTypePtr & new_variant)
     }
 
     variant_info.variant_type = new_variant_type;
+    variant_info.variant_name = new_variant_type->getName();
     variant_info.variant_names = new_variant_names;
     variant_info.variant_name_to_discriminator = new_variant_name_to_discriminator;
     assert_cast<ColumnVariant &>(*variant_column).extend(current_to_new_discriminators, std::move(new_variant_columns_and_discriminators_to_add));
+    variant_mappings_cache.clear();
     return true;
 }
 
@@ -101,38 +105,31 @@ void ColumnDynamic::addStringVariant()
     addNewVariant(std::make_shared<DataTypeString>());
 }
 
-std::optional<std::vector<ColumnVariant::Discriminator>> ColumnDynamic::combineVariants(const DB::ColumnDynamic::VariantInfo & other_variant_info)
+std::vector<ColumnVariant::Discriminator> * ColumnDynamic::combineVariants(const DB::ColumnDynamic::VariantInfo & other_variant_info)
 {
-    const DataTypes & current_variants = assert_cast<const DataTypeVariant &>(*variant_info.variant_type).getVariants();
+    auto cache_it = variant_mappings_cache.find(other_variant_info.variant_name);
+    if (cache_it != variant_mappings_cache.end())
+        return &cache_it->second;
+
     const DataTypes & other_variants = assert_cast<const DataTypeVariant &>(*other_variant_info.variant_type).getVariants();
-    DataTypes all_variants = current_variants;
+
+    size_t num_new_variants = 0;
     for (size_t i = 0; i != other_variants.size(); ++i)
     {
         if (!variant_info.variant_name_to_discriminator.contains(other_variant_info.variant_names[i]))
-            all_variants.push_back(other_variants[i]);
+            ++num_new_variants;
     }
-
-    /// We cannot combine Variants if total number of variants exceeds MAX_NESTED_COLUMNS.
-    if (all_variants.size() > ColumnVariant::MAX_NESTED_COLUMNS)
-        return std::nullopt;
-
-    /// We cannot combine Variants if total number of variants reaches MAX_NESTED_COLUMNS and we don't have String variant.
-    if (all_variants.size() == ColumnVariant::MAX_NESTED_COLUMNS && !variant_info.variant_name_to_discriminator.contains("String") && !other_variant_info.variant_name_to_discriminator.contains("String"))
-        return std::nullopt;
-
-    auto new_variant_type = std::make_shared<DataTypeVariant>(all_variants);
-    const DataTypes & new_variants = assert_cast<const DataTypeVariant *>(new_variant_type.get())->getVariants();
 
     std::vector<ColumnVariant::Discriminator> other_to_new_discriminators;
     other_to_new_discriminators.resize(other_variants.size());
 
     /// Check if there are no new variants.
     /// In this case we should just create a global discriminators mapping for other variant.
-    if (new_variants.size() == current_variants.size())
+    if (num_new_variants == 0)
     {
-        for (ColumnVariant::Discriminator discr = 0; discr != current_variants.size(); ++discr)
+        for (const auto & [variant_name, discr] : variant_info.variant_name_to_discriminator)
         {
-            auto it = other_variant_info.variant_name_to_discriminator.find(variant_info.variant_names[discr]);
+            auto it = other_variant_info.variant_name_to_discriminator.find(variant_name);
             if (it != other_variant_info.variant_name_to_discriminator.end())
                 other_to_new_discriminators[it->second] = discr;
         }
@@ -141,6 +138,21 @@ std::optional<std::vector<ColumnVariant::Discriminator>> ColumnDynamic::combineV
     /// and create a global discriminators mapping for other variant.
     else
     {
+        const DataTypes & current_variants = assert_cast<const DataTypeVariant &>(*variant_info.variant_type).getVariants();
+
+        /// We cannot combine Variants if total number of variants exceeds MAX_NESTED_COLUMNS.
+        if (current_variants.size() + num_new_variants > ColumnVariant::MAX_NESTED_COLUMNS)
+            return nullptr;
+
+        /// We cannot combine Variants if total number of variants reaches MAX_NESTED_COLUMNS and we don't have String variant.
+        if (current_variants.size() + num_new_variants == ColumnVariant::MAX_NESTED_COLUMNS && !variant_info.variant_name_to_discriminator.contains("String") && !other_variant_info.variant_name_to_discriminator.contains("String"))
+            return nullptr;
+
+        DataTypes all_variants = current_variants;
+        all_variants.insert(all_variants.end(), other_variants.begin(), other_variants.end());
+        auto new_variant_type = std::make_shared<DataTypeVariant>(all_variants);
+        const DataTypes & new_variants = assert_cast<const DataTypeVariant *>(new_variant_type.get())->getVariants();
+
         Names new_variant_names;
         new_variant_names.reserve(new_variants.size());
         std::unordered_map<String, ColumnVariant::Discriminator> new_variant_name_to_discriminator;
@@ -168,12 +180,15 @@ std::optional<std::vector<ColumnVariant::Discriminator>> ColumnDynamic::combineV
         }
 
         variant_info.variant_type = new_variant_type;
+        variant_info.variant_name = new_variant_type->getName();
         variant_info.variant_names = new_variant_names;
         variant_info.variant_name_to_discriminator = new_variant_name_to_discriminator;
         assert_cast<ColumnVariant &>(*variant_column).extend(current_to_new_discriminators, std::move(new_variant_columns_and_discriminators_to_add));
+        variant_mappings_cache.clear();
     }
 
-    return other_to_new_discriminators;
+    auto [it, _] = variant_mappings_cache.emplace(other_variant_info.variant_name, std::move(other_to_new_discriminators));
+    return &it->second;
 }
 
 void ColumnDynamic::insert(const DB::Field & x)
@@ -211,7 +226,7 @@ void ColumnDynamic::insertFrom(const DB::IColumn & src_, size_t n)
     const auto & dynamic_src = assert_cast<const ColumnDynamic &>(src_);
 
     /// Check if we have the same variants in both columns.
-    if (variant_info.variant_names == dynamic_src.variant_info.variant_names)
+    if (variant_info.variant_name == dynamic_src.variant_info.variant_name)
     {
         variant_column->insertFrom(*dynamic_src.variant_column, n);
         return;

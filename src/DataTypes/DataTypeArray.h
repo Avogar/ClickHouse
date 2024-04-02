@@ -55,7 +55,8 @@ public:
     bool textCanContainOnlyValidUTF8() const override { return nested->textCanContainOnlyValidUTF8(); }
     bool isComparable() const override { return nested->isComparable(); }
     bool canBeComparedWithCollation() const override { return nested->canBeComparedWithCollation(); }
-    bool hasDynamicSubcolumns() const override { return nested->hasDynamicSubcolumns(); }
+    bool hasDynamicSubcolumnsDeprecated() const override { return nested->hasDynamicSubcolumnsDeprecated(); }
+    std::unique_ptr<SubstreamData> getDynamicSubcolumnData(std::string_view subcolumn_name, const SubstreamData & data, bool throw_if_null) const override;
 
     bool isValueUnambiguouslyRepresentedInContiguousMemoryRegion() const override
     {
@@ -68,6 +69,9 @@ public:
 
     /// 1 for plain array, 2 for array of arrays and so on.
     size_t getNumberOfDimensions() const;
+
+private:
+    bool hasDynamicSubcolumnsData() const override { return nested->hasDynamicSubcolumnsData(); }
 };
 
 }

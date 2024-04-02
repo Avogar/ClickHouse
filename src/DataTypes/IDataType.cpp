@@ -106,33 +106,47 @@ std::unique_ptr<IDataType::SubstreamData> IDataType::getSubcolumnData(
     const SubstreamData & data,
     bool throw_if_null)
 {
-    if (data.type->hasDynamicSubcolumns())
+//    std::cerr << "Get subcolumn data for subcolumn " << subcolumn_name << " from type " << data.type->getName() << "\n";
+    if (data.type->hasDynamicSubcolumnsData())
         return data.type->getDynamicSubcolumnData(subcolumn_name, data, throw_if_null);
 
     std::unique_ptr<IDataType::SubstreamData> res;
 
     ISerialization::StreamCallback callback_with_data = [&](const auto & subpath)
     {
+//        std::cerr << "Subpath: " << subpath.toString() << "\n";
         for (size_t i = 0; i < subpath.size(); ++i)
         {
             size_t prefix_len = i + 1;
+//            std::cerr << "Check subpath " << subpath[i].toString() << "\n";
             if (!subpath[i].visited && ISerialization::hasSubcolumnForPath(subpath, prefix_len))
             {
                 String name = ISerialization::getSubcolumnNameForStream(subpath, prefix_len);
+                std::cerr << "Process subcolumn " << name << "\n";
+                std::cerr << fmt::format("Type: {}\n", subpath[i].data.type ? subpath[i].data.type->getName() : "NULL");
                 /// Create data from path only if it's requested subcolumn.
                 if (name == subcolumn_name)
                 {
                     res = std::make_unique<SubstreamData>(ISerialization::createFromPath(subpath, prefix_len));
                 }
-                else if (subcolumn_name.starts_with(name + ".") && subpath.back().data.type && subpath.back().data.type->hasDynamicSubcolumns())
+                else if (subcolumn_name.starts_with(name + ".") && subpath[i].data.type && subpath[i].data.type->hasDynamicSubcolumnsData())
                 {
+//                    std::cerr << "Has synamic subcolumns\n";
+
                     auto dynamic_subcolumn_name = subcolumn_name.substr(name.size() + 1);
-                    auto dynamic_subcolumn_data = subpath.back().data.type->getDynamicSubcolumnData(dynamic_subcolumn_name, subpath.back().data, false);
+                    auto dynamic_subcolumn_data = subpath[i].data.type->getDynamicSubcolumnData(dynamic_subcolumn_name, subpath[i].data, false);
                     if (dynamic_subcolumn_data)
                     {
                         auto tmp_subpath = subpath;
-                        tmp_subpath.back().data = *dynamic_subcolumn_data;
-                        res = std::make_unique<SubstreamData>(ISerialization::createFromPath(subpath, prefix_len));
+                        if (tmp_subpath[i].creator)
+                        {
+                            dynamic_subcolumn_data->type = tmp_subpath[i].creator->create(dynamic_subcolumn_data->type);
+                            dynamic_subcolumn_data->column = tmp_subpath[i].creator->create(dynamic_subcolumn_data->column);
+                            dynamic_subcolumn_data->serialization = tmp_subpath[i].creator->create(dynamic_subcolumn_data->serialization);
+                        }
+
+                        tmp_subpath[i].data = *dynamic_subcolumn_data;
+                        res = std::make_unique<SubstreamData>(ISerialization::createFromPath(tmp_subpath, prefix_len));
                     }
                 }
             }
@@ -147,12 +161,28 @@ std::unique_ptr<IDataType::SubstreamData> IDataType::getSubcolumnData(
     if (!res && throw_if_null)
         throw Exception(ErrorCodes::ILLEGAL_COLUMN, "There is no subcolumn {} in type {}", subcolumn_name, data.type->getName());
 
+//    std::cerr << "Finish\n";
     return res;
 }
 
 bool IDataType::hasSubcolumn(std::string_view subcolumn_name) const
 {
     return tryGetSubcolumnType(subcolumn_name) != nullptr;
+}
+
+bool IDataType::hasDynamicSubcolumns() const
+{
+    if (hasDynamicSubcolumnsData())
+        return true;
+
+    bool has_dynamic_subcolumns = false;
+    auto data = SubstreamData(getDefaultSerialization()).withType(getPtr());
+    auto callback = [&](const SubstreamPath &, const String &, const SubstreamData & subcolumn_data)
+    {
+        has_dynamic_subcolumns |= subcolumn_data.type->hasDynamicSubcolumnsData();
+    };
+    forEachSubcolumn(callback, data);
+    return has_dynamic_subcolumns;
 }
 
 DataTypePtr IDataType::tryGetSubcolumnType(std::string_view subcolumn_name) const
@@ -339,6 +369,7 @@ bool isMap(TYPE data_type) {return WhichDataType(data_type).isMap(); } \
 bool isInterval(TYPE data_type) {return WhichDataType(data_type).isInterval(); } \
 bool isObject(TYPE data_type) { return WhichDataType(data_type).isObject(); } \
 bool isVariant(TYPE data_type) { return WhichDataType(data_type).isVariant(); } \
+bool isDynamic(TYPE data_type) { return WhichDataType(data_type).isDynamic(); } \
 bool isNothing(TYPE data_type) { return WhichDataType(data_type).isNothing(); } \
 \
 bool isColumnedAsNumber(TYPE data_type) \

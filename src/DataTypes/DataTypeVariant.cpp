@@ -136,17 +136,15 @@ bool DataTypeVariant::haveMaximumSizeOfValue() const
     return std::all_of(variants.begin(), variants.end(), [](auto && elem) { return elem->haveMaximumSizeOfValue(); });
 }
 
-bool DataTypeVariant::hasDynamicSubcolumns() const
+bool DataTypeVariant::hasDynamicSubcolumnsDeprecated() const
 {
-    return std::any_of(variants.begin(), variants.end(), [](auto && elem) { return elem->hasDynamicSubcolumns(); });
+    return std::any_of(variants.begin(), variants.end(), [](auto && elem) { return elem->hasDynamicSubcolumnsDeprecated(); });
 }
 
-std::optional<ColumnVariant::Discriminator> DataTypeVariant::tryGetVariantDiscriminator(const IDataType & type) const
+std::optional<ColumnVariant::Discriminator> DataTypeVariant::tryGetVariantDiscriminator(const String & type_name) const
 {
-    String type_name = type.getName();
     for (size_t i = 0; i != variants.size(); ++i)
     {
-        /// We don't use equals here, because it doesn't respect custom type names.
         if (variants[i]->getName() == type_name)
             return i;
     }

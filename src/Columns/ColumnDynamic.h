@@ -22,7 +22,9 @@ private:
     struct VariantInfo
     {
         DataTypePtr variant_type;
-        /// Store names of variants to not call getName() every time.
+        /// Name of the whole variant to not call getName() every time.
+        String variant_name;
+        /// Store names of variants to not call getName() every time on variants.
         Names variant_names;
         /// Store mapping (variant name) -> (global discriminator).
         /// It's used during variant extension.
@@ -303,19 +305,14 @@ public:
     bool hasDynamicStructure() const override { return true; }
     void takeDynamicStructureFromSourceColumns(const Columns & source_columns) override;
 
-    virtual bool hasDynamicSubcolumns() const { return true; }
-    virtual bool hasDynamicSubcolumn(std::string_view subcolumn_name) const;
-    virtual DataTypePtr getDynamicSubcolumnType(std::string_view subcolumn_name) const;
-    ColumnPtr tryGetDynamicSubcolumn(std::string_view subcolumn_name, const ColumnPtr & /*column*/) const;
-    ColumnPtr getDynamicSubcolumn(std::string_view subcolumn_name, const ColumnPtr & /*column*/) const;
-    SerializationPtr getDynamicSubcolumnSerialization(std::string_view subcolumn_name, const SerializationPtr & /*serialization*/) const;
-    
 private:
-    std::optional<std::vector<UInt8>> combineVariants(const VariantInfo & other_variant_info);
+    std::vector<UInt8> * combineVariants(const VariantInfo & other_variant_info);
 
     WrappedPtr variant_column;
     /// Store the type of current variant with some additional information.
     VariantInfo variant_info;
+
+    std::unordered_map<String, std::vector<UInt8>> variant_mappings_cache;
 };
 
 }

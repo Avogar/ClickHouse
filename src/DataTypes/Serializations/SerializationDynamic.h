@@ -8,6 +8,20 @@ namespace DB
 class SerializationDynamic : public ISerialization
 {
 public:
+    struct DynamicStructureSerializationVersion
+    {
+        enum Value
+        {
+            VariantTypeName = 1,
+        };
+
+        Value value;
+
+        static void checkVersion(UInt64 version);
+
+        explicit DynamicStructureSerializationVersion(UInt64 version);
+    };
+
     void enumerateStreams(
         EnumerateStreamsSettings & settings,
         const StreamCallback & callback,

@@ -48,44 +48,35 @@ void SerializationDynamic::enumerateStreams(
     settings.path.pop_back();
 }
 
-struct DynamicStructureSerializationVersion
+SerializationDynamic::DynamicStructureSerializationVersion::DynamicStructureSerializationVersion(UInt64 version) : value(static_cast<Value>(version))
 {
-    enum Value
-    {
-        VariantTypeName = 1,
-    };
+    checkVersion(version);
+}
 
-    Value value;
-
-    static void checkVersion(UInt64 version)
-    {
-        if (version != VariantTypeName)
-            throw Exception(ErrorCodes::INCORRECT_DATA, "Invalid version for Dynamic structure serialization.");
-    }
-
-    explicit DynamicStructureSerializationVersion(UInt64 version) : value(static_cast<Value>(version)) { checkVersion(version); }
-};
+void SerializationDynamic::DynamicStructureSerializationVersion::checkVersion(UInt64 version)
+{
+    if (version != VariantTypeName)
+        throw Exception(ErrorCodes::INCORRECT_DATA, "Invalid version for Dynamic structure serialization.");
+}
 
 struct SerializeBinaryBulkStateDynamic : public ISerialization::SerializeBinaryBulkState
 {
-    DynamicStructureSerializationVersion structure_version;
+    SerializationDynamic::DynamicStructureSerializationVersion structure_version;
     DataTypePtr variant_type;
     SerializationPtr variant_serialization;
     ISerialization::SerializeBinaryBulkStatePtr variant_state;
 
     explicit SerializeBinaryBulkStateDynamic(UInt64 structure_version_) : structure_version(structure_version_) {}
-
 };
 
 struct DeserializeBinaryBulkStateDynamic : public ISerialization::DeserializeBinaryBulkState
 {
-    DynamicStructureSerializationVersion structure_version;
+    SerializationDynamic::DynamicStructureSerializationVersion structure_version;
     DataTypePtr variant_type;
     SerializationPtr variant_serialization;
     ISerialization::DeserializeBinaryBulkStatePtr variant_state;
 
     explicit DeserializeBinaryBulkStateDynamic(UInt64 structure_version_) : structure_version(structure_version_) {}
-
 };
 
 void SerializationDynamic::serializeBinaryBulkStatePrefix(
@@ -465,10 +456,10 @@ void SerializationDynamic::serializeTextJSON(const IColumn & column, size_t row_
 
 void SerializationDynamic::deserializeTextJSON(IColumn & column, ReadBuffer & istr, const FormatSettings & settings) const
 {
-    auto read_field = [](ReadBuffer & buf)
+    auto read_field = [&settings](ReadBuffer & buf)
     {
         String field;
-        readJSONField(field, buf);
+        readJSONField(field, buf, settings.json);
         return field;
     };
 

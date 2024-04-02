@@ -29,12 +29,10 @@ public:
 
     bool haveSubtypes() const override { return false; }
 
-    bool hasDynamicSubcolumns() const override { return true; }
-    bool hasDynamicSubcolumn(std::string_view subcolumn_name) const override;
-
+private:
+    bool hasDynamicSubcolumnsData() const override { return true; }
     std::unique_ptr<SubstreamData> getDynamicSubcolumnData(std::string_view subcolumn_name, const SubstreamData & data, bool throw_if_null) const override;
 
-private:
     SerializationPtr doGetDefaultSerialization() const override;
 };
 
