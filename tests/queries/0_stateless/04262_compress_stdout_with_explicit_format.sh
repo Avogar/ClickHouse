@@ -31,9 +31,13 @@ zstd -d "${OUTPUT_FILE}" -o "${OUTPUT_FILE%.zst}" --rm -q
 cat "${OUTPUT_FILE%.zst}"
 rm -f "${OUTPUT_FILE%.zst}"
 
-# Test 4: --input-format with compressed stdin should decompress correctly
-INPUT_FILE="${CLICKHOUSE_TMP}/test_explicit_input_format_compress.jsonl.gz"
+# Test 4: --format with compressed stdin should decompress correctly.
+# Use --format (not --input-format) because --input-format in clickhouse-local
+# sets the "table-data-format" config key, not "input-format", so it doesn't
+# exercise the explicit-format branch in setDefaultFormatsAndCompressionFromConfiguration.
+# Use a filename without .jsonl extension to prevent format inference from the fd name.
+INPUT_FILE="${CLICKHOUSE_TMP}/test_explicit_format_compress_input.gz"
 rm -f "${INPUT_FILE}"
 echo '{"x": 42}' | gzip > "${INPUT_FILE}"
-${CLICKHOUSE_LOCAL} --input-format JSONEachRow --query "SELECT x FROM table" < "${INPUT_FILE}"
+${CLICKHOUSE_LOCAL} --format JSONEachRow --query "SELECT x FROM table" < "${INPUT_FILE}"
 rm -f "${INPUT_FILE}"
