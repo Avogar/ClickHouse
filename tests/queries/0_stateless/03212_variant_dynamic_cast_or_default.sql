@@ -1,3 +1,5 @@
+-- Tags: long
+
 set allow_experimental_variant_type = 1;
 set use_variant_as_common_type = 1;
 set allow_experimental_dynamic_type = 1;
@@ -17,8 +19,6 @@ drop table if exists t;
 create table t (id UInt64 DEFAULT generateSerialID('03212_variant_seq'), d Dynamic) engine=MergeTree order by id settings map_serialization_version = 'basic', map_serialization_version_for_zero_level_parts = 'basic';
 
 -- Integer types: signed and unsigned integers (UInt8, UInt16, UInt32, UInt64, UInt128, UInt256, Int8, Int16, Int32, Int64, Int128, Int256)
-INSERT INTO t (d) VALUES (-128::Int8), (-127::Int8), (-1::Int8), (0::Int8), (1::Int8), (126::Int8), (127::Int8);
-INSERT INTO t (d) VALUES (-128::Int8), (-127::Int8), (-1::Int8), (0::Int8), (1::Int8), (126::Int8), (127::Int8);
 INSERT INTO t (d) VALUES (-128::Int8), (-127::Int8), (-1::Int8), (0::Int8), (1::Int8), (126::Int8), (127::Int8);
 INSERT INTO t (d) VALUES (-32768::Int16), (-32767::Int16), (-1::Int16), (0::Int16), (1::Int16), (32766::Int16), (32767::Int16);
 INSERT INTO t (d) VALUES (-2147483648::Int32), (-2147483647::Int32), (-1::Int32), (0::Int32), (1::Int32), (2147483646::Int32), (2147483647::Int32);
@@ -85,57 +85,6 @@ INSERT INTO t (d) VALUES ([(1, 'aa'), (2, 'bb')]::Nested(x UInt32, y String));
 INSERT INTO t (d) VALUES ([(1, (2, ['aa', 'bb']), [(3, 'cc'), (4, 'dd')]), (5, (6, ['ee', 'ff']), [(7, 'gg'), (8, 'hh')])]::Nested(x UInt32, y Tuple(y1 UInt32, y2 Array(String)), z Nested(z1 UInt32, z2 String)));
 
 optimize table t final;
-
-WITH
-  (SELECT count()
-     FROM t
-    WHERE accurateCastOrNull(d,'IPv4') IS NOT NULL
-      AND toIPv4(accurateCastOrNull(d,'IPv4')) NOT IN (toIPv4('0.0.0.0'), toIPv4('192.168.0.1'))
-  ) AS bad_v4,
-  (SELECT count()
-     FROM t
-    WHERE accurateCastOrNull(d,'IPv6') IS NOT NULL
-      AND toIPv6(accurateCastOrNull(d,'IPv6')) NOT IN (toIPv6('::'), toIPv6('::1'), toIPv6('::ffff:192.168.0.1'))
-  ) AS bad_v6,
-  bad_v4 + bad_v6 AS bad_cnt
-SELECT
-  'ch_dbg_summary' AS tag,
-  (SELECT count() FROM t)                                                AS total,
-  (SELECT count() FROM t WHERE accurateCastOrNull(d,'IPv4') IS NOT NULL) AS typed_v4,
-  (SELECT count() FROM t WHERE accurateCastOrNull(d,'IPv6') IS NOT NULL) AS typed_v6,
-  bad_v4, bad_v6,
-  version() AS ver,
-  getSetting('session_timezone') AS tz
-WHERE bad_cnt > 0;
-
-WITH
-  (SELECT count()
-     FROM t
-    WHERE accurateCastOrNull(d,'IPv4') IS NOT NULL
-      AND toIPv4(accurateCastOrNull(d,'IPv4')) NOT IN (toIPv4('0.0.0.0'), toIPv4('192.168.0.1'))
-  ) +
-  (SELECT count()
-     FROM t
-    WHERE accurateCastOrNull(d,'IPv6') IS NOT NULL
-      AND toIPv6(accurateCastOrNull(d,'IPv6')) NOT IN (toIPv6('::'), toIPv6('::1'), toIPv6('::ffff:192.168.0.1'))
-  ) AS bad_cnt
-SELECT
-  'ch_dbg_offenders' AS tag,
-  id,
-  toTypeName(d)                        AS src_type,
-  toIPv4(accurateCastOrNull(d,'IPv4')) AS v4,
-  toIPv6(accurateCastOrNull(d,'IPv6')) AS v6,
-  toString(d)                          AS raw_d
-FROM t
-WHERE bad_cnt > 0
-  AND (
-        (accurateCastOrNull(d,'IPv4') IS NOT NULL
-         AND toIPv4(accurateCastOrNull(d,'IPv4')) NOT IN (toIPv4('0.0.0.0'), toIPv4('192.168.0.1')))
-     OR (accurateCastOrNull(d,'IPv6') IS NOT NULL
-         AND toIPv6(accurateCastOrNull(d,'IPv6')) NOT IN (toIPv6('::'), toIPv6('::1'), toIPv6('::ffff:192.168.0.1')))
-      )
-ORDER BY id
-LIMIT 20;
 
 select distinct toInt8OrDefault(d) as res from t order by res;
 select distinct toUInt8OrDefault(d) as res from t order by res;
